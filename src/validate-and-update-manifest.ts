@@ -71,6 +71,7 @@ export async function updateManifest(): Promise<void> {
     fs.writeFileSync(manifestPath, JSON.stringify(jsonData, null, 4), 'utf8')
 
     core.info('All operations completed successfully.')
+    process.exit(0)
   } catch (error) {
     core.setFailed(
       `Error updating manifest: ${error instanceof Error ? error.message : String(error)}`

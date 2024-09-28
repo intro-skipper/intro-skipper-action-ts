@@ -25128,6 +25128,7 @@ async function updateManifest() {
         // Write the modified JSON data back to the file
         fs_1.default.writeFileSync(manifestPath, JSON.stringify(jsonData, null, 4), 'utf8');
         core.info('All operations completed successfully.');
+        process.exit(0);
     }
     catch (error) {
         core.setFailed(`Error updating manifest: ${error instanceof Error ? error.message : String(error)}`);
