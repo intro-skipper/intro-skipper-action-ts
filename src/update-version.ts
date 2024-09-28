@@ -3,7 +3,7 @@ import * as core from '@actions/core'
 import fs from 'fs'
 
 // Function to increment version string
-function incrementVersion(version: string): string {
+export function incrementVersion(version: string): string {
   const parts = version.split('.').map(Number)
   parts[parts.length - 1] += 1 // Increment the last part of the version
   return parts.join('.')
