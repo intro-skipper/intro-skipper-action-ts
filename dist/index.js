@@ -25250,7 +25250,7 @@ async function getNugetPackageVersion(packageName, versionPattern) {
         // Create a regular expression from the version pattern
         const versionRegex = new RegExp(versionPattern.replace(/\./g, '\\.').replace('*', '.*'));
         // Filter versions based on the provided pattern
-        const matchingVersions = versions.filter(v => versionRegex.test(v.version));
+        const matchingVersions = versions.filter(v => versionRegex.test(v));
         // Check if there are any matching versions
         if (matchingVersions.length > 0) {
             const latestVersion = matchingVersions[matchingVersions.length - 1];

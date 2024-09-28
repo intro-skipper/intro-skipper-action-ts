@@ -229,7 +229,7 @@ async function getNugetPackageVersion(
 
     // Filter versions based on the provided pattern
     const matchingVersions = versions.filter(v =>
-      versionRegex.test(v.version as string)
+      versionRegex.test(v as unknown as string)
     )
 
     // Check if there are any matching versions
