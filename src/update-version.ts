@@ -9,43 +9,48 @@ export function incrementVersion(version: string): string {
   return parts.join('.')
 }
 
-export async function updateVersion(): Promise<void> {
-  const csprojPath =
-    './ConfusedPolarBear.Plugin.IntroSkipper/ConfusedPolarBear.Plugin.IntroSkipper.csproj'
-  if (!fs.existsSync(csprojPath)) {
-    core.setFailed(
-      'ConfusedPolarBear.Plugin.IntroSkipper.csproj file not found'
-    )
+export async function updateVersion(
+  csprojPath = './ConfusedPolarBear.Plugin.IntroSkipper/ConfusedPolarBear.Plugin.IntroSkipper.csproj',
+  fileSystem: typeof fs = fs,
+  logger: typeof core = core
+): Promise<void> {
+  if (!fileSystem.existsSync(csprojPath)) {
+    logger.setFailed(`${csprojPath} file not found`)
+    return
   }
-  // Read the .csproj file
-  fs.readFile(csprojPath, 'utf8', (err, data) => {
-    if (err) {
-      return core.setFailed(`Failed to read .csproj file:${err}`)
-    }
 
-    let newAssemblyVersion = null
-    let newFileVersion = null
+  try {
+    const data = await fileSystem.promises.readFile(csprojPath, 'utf8')
+    const { updatedData, newAssemblyVersion, newFileVersion } =
+      updateVersionsInData(data)
 
-    // Use regex to find and increment versions
-    const updatedData = data
-      .replace(
-        /<AssemblyVersion>(.*?)<\/AssemblyVersion>/,
-        (_match, version) => {
-          newAssemblyVersion = incrementVersion(version)
-          return `<AssemblyVersion>${newAssemblyVersion}</AssemblyVersion>`
-        }
-      )
-      .replace(/<FileVersion>(.*?)<\/FileVersion>/, (match, version) => {
-        newFileVersion = incrementVersion(version)
-        return `<FileVersion>${newFileVersion}</FileVersion>`
-      })
+    await fileSystem.promises.writeFile(csprojPath, updatedData, 'utf8')
+    logger.info('Version incremented successfully!')
 
-    // Write the updated XML back to the .csproj file
-    fs.writeFileSync(csprojPath, updatedData, 'utf8')
-    core.info('Version incremented successfully!')
+    logger.exportVariable('NEW_ASSEMBLY_VERSION', newAssemblyVersion)
+    logger.exportVariable('NEW_FILE_VERSION', newFileVersion)
+  } catch (error) {
+    logger.setFailed(`Error updating version: ${error}`)
+  }
+}
 
-    // Write the new versions to GitHub Actions environment files
-    core.exportVariable('NEW_ASSEMBLY_VERSION', newAssemblyVersion)
-    core.exportVariable('NEW_FILE_VERSION', newFileVersion)
-  })
+export function updateVersionsInData(data: string): {
+  updatedData: string
+  newAssemblyVersion: string
+  newFileVersion: string
+} {
+  let newAssemblyVersion = ''
+  let newFileVersion = ''
+
+  const updatedData = data
+    .replace(/<AssemblyVersion>(.*?)<\/AssemblyVersion>/, (_match, version) => {
+      newAssemblyVersion = incrementVersion(version)
+      return `<AssemblyVersion>${newAssemblyVersion}</AssemblyVersion>`
+    })
+    .replace(/<FileVersion>(.*?)<\/FileVersion>/, (_match, version) => {
+      newFileVersion = incrementVersion(version)
+      return `<FileVersion>${newFileVersion}</FileVersion>`
+    })
+
+  return { updatedData, newAssemblyVersion, newFileVersion }
 }
