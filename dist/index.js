@@ -24920,7 +24920,7 @@ exports["default"] = _default;
 
 /***/ }),
 
-/***/ 399:
+/***/ 6144:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 "use strict";
@@ -24949,54 +24949,321 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.run = run;
 const core = __importStar(__nccwpck_require__(2186));
-const wait_1 = __nccwpck_require__(5259);
 /**
- * The main function for the action.
- * @returns {Promise<void>} Resolves when the action is complete.
+ * The entrypoint for the action.
  */
-async function run() {
-    try {
-        const ms = core.getInput('milliseconds');
-        // Debug logs are only output if the `ACTIONS_STEP_DEBUG` secret is true
-        core.debug(`Waiting ${ms} milliseconds ...`);
-        // Log the current timestamp, wait, then log the new timestamp
-        core.debug(new Date().toTimeString());
-        await (0, wait_1.wait)(parseInt(ms, 10));
-        core.debug(new Date().toTimeString());
-        // Set outputs for other workflow steps to use
-        core.setOutput('time', new Date().toTimeString());
-    }
-    catch (error) {
-        // Fail the workflow run if an error occurs
-        if (error instanceof Error)
-            core.setFailed(error.message);
-    }
+const validate_and_update_manifest_1 = __nccwpck_require__(8635);
+const update_version_1 = __nccwpck_require__(757);
+const taskType = core.getInput('task-type');
+if (taskType === 'updateManifest') {
+    (0, validate_and_update_manifest_1.updateManifest)();
+}
+else if (taskType === 'updateVersion') {
+    (0, update_version_1.updateVersion)();
+}
+else {
+    core.setFailed(`Invalid task type: ${taskType}`);
 }
 
 
 /***/ }),
 
-/***/ 5259:
-/***/ ((__unused_webpack_module, exports) => {
+/***/ 757:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 "use strict";
 
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.wait = wait;
-/**
- * Wait for a number of milliseconds.
- * @param milliseconds The number of milliseconds to wait.
- * @returns {Promise<string>} Resolves with 'done!' after the wait is over.
- */
-async function wait(milliseconds) {
-    return new Promise(resolve => {
-        if (isNaN(milliseconds)) {
-            throw new Error('milliseconds not a number');
+exports.updateVersion = updateVersion;
+const core = __importStar(__nccwpck_require__(2186));
+const fs_1 = __importDefault(__nccwpck_require__(7147));
+// Function to increment version string
+function incrementVersion(version) {
+    const parts = version.split('.').map(Number);
+    parts[parts.length - 1] += 1; // Increment the last part of the version
+    return parts.join('.');
+}
+async function updateVersion() {
+    const csprojPath = './ConfusedPolarBear.Plugin.IntroSkipper/ConfusedPolarBear.Plugin.IntroSkipper.csproj';
+    if (!fs_1.default.existsSync(csprojPath)) {
+        core.setFailed('ConfusedPolarBear.Plugin.IntroSkipper.csproj file not found');
+    }
+    // Read the .csproj file
+    fs_1.default.readFile(csprojPath, 'utf8', (err, data) => {
+        if (err) {
+            return core.setFailed(`Failed to read .csproj file:${err}`);
         }
-        setTimeout(() => resolve('done!'), milliseconds);
+        let newAssemblyVersion = null;
+        let newFileVersion = null;
+        // Use regex to find and increment versions
+        const updatedData = data
+            .replace(/<AssemblyVersion>(.*?)<\/AssemblyVersion>/, (_match, version) => {
+            newAssemblyVersion = incrementVersion(version);
+            return `<AssemblyVersion>${newAssemblyVersion}</AssemblyVersion>`;
+        })
+            .replace(/<FileVersion>(.*?)<\/FileVersion>/, (match, version) => {
+            newFileVersion = incrementVersion(version);
+            return `<FileVersion>${newFileVersion}</FileVersion>`;
+        });
+        // Write the updated XML back to the .csproj file
+        fs_1.default.writeFileSync(csprojPath, updatedData, 'utf8');
+        core.info('Version incremented successfully!');
+        // Write the new versions to GitHub Actions environment files
+        core.exportVariable('NEW_ASSEMBLY_VERSION', newAssemblyVersion);
+        core.exportVariable('NEW_FILE_VERSION', newFileVersion);
     });
+}
+
+
+/***/ }),
+
+/***/ 8635:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.updateManifest = updateManifest;
+const core = __importStar(__nccwpck_require__(2186));
+const https_1 = __importDefault(__nccwpck_require__(5687));
+const crypto_1 = __importDefault(__nccwpck_require__(6113));
+const fs_1 = __importDefault(__nccwpck_require__(7147));
+const url_1 = __nccwpck_require__(7310);
+const repository = process.env.GITHUB_REPOSITORY;
+const version = process.env.NEW_FILE_VERSION;
+const gitHubRepoVisibilty = process.env.GITHUB_REPO_VISIBILITY;
+let currentVersion;
+let targetAbi = '';
+// Read manifest.json
+const manifestPath = './manifest.json';
+if (!fs_1.default.existsSync(manifestPath)) {
+    core.setFailed('manifest.json file not found');
+}
+// Read README.md
+const readmePath = './README.md';
+if (!fs_1.default.existsSync(readmePath)) {
+    core.setFailed('README.md file not found');
+}
+// Read .github/ISSUE_TEMPLATE/bug_report_form.yml
+const bugReportFormPath = './.github/ISSUE_TEMPLATE/bug_report_form.yml';
+if (!fs_1.default.existsSync(bugReportFormPath)) {
+    core.setFailed(`${bugReportFormPath} file not found`);
+}
+const jsonData = JSON.parse(fs_1.default.readFileSync(manifestPath, 'utf8'));
+async function updateManifest() {
+    try {
+        currentVersion = await getNugetPackageVersion('Jellyfin.Model', '10.*-*');
+        targetAbi = `${currentVersion}.0`;
+        const newVersion = {
+            version,
+            changelog: `- See the full changelog at [GitHub](https://github.com/${repository}/releases/tag/10.9/v${version})\n`,
+            targetAbi,
+            sourceUrl: `https://github.com/${repository}/releases/download/10.9/v${version}/intro-skipper-v${version}.zip`,
+            checksum: getMD5FromFile(),
+            timestamp: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
+        };
+        console.log(`Repo is ${gitHubRepoVisibilty}.`);
+        if (gitHubRepoVisibilty === 'public') {
+            await validVersion(newVersion);
+        }
+        // Add the new version to the manifest
+        jsonData[0].versions.unshift(newVersion);
+        core.info('Manifest updated successfully.');
+        updateDocsVersion(readmePath);
+        updateDocsVersion(bugReportFormPath);
+        cleanUpOldReleases();
+        // Write the modified JSON data back to the file
+        fs_1.default.writeFileSync(manifestPath, JSON.stringify(jsonData, null, 4), 'utf8');
+        core.info('All operations completed successfully.');
+    }
+    catch (error) {
+        core.setFailed(`Error updating manifest: ${error instanceof Error ? error.message : String(error)}`);
+    }
+}
+async function validVersion(v) {
+    core.info(`Validating version ${v.version}...`);
+    const isValidChecksum = await verifyChecksum(v.sourceUrl, v.checksum);
+    if (!isValidChecksum) {
+        core.setFailed(`Checksum mismatch for URL: ${v.sourceUrl}`);
+    }
+    else {
+        core.info(`Version ${v.version} is valid.`);
+    }
+}
+async function verifyChecksum(url, expectedChecksum) {
+    try {
+        const hash = await downloadAndHashFile(url);
+        return hash === expectedChecksum;
+    }
+    catch (error) {
+        core.setFailed(`Error verifying checksum for URL: ${url} ${error}`);
+        return false;
+    }
+}
+async function downloadAndHashFile(url, redirects = 5) {
+    if (redirects === 0) {
+        throw new Error('Too many redirects');
+    }
+    return new Promise((resolve, reject) => {
+        https_1.default
+            .get(url, async (response) => {
+            try {
+                if (response.statusCode != null &&
+                    response.statusCode >= 300 &&
+                    response.statusCode < 400 &&
+                    response.headers.location) {
+                    // Follow redirect
+                    const redirectUrl = new url_1.URL(response.headers.location, url).toString();
+                    const hash = await downloadAndHashFile(redirectUrl, redirects - 1);
+                    resolve(hash);
+                }
+                else if (response.statusCode === 200) {
+                    const hash = crypto_1.default.createHash('md5');
+                    response.pipe(hash);
+                    response.on('end', () => {
+                        resolve(hash.digest('hex'));
+                    });
+                    response.on('error', err => {
+                        reject(err);
+                    });
+                }
+                else {
+                    reject(new Error(`Failed to get '${url}' (${response.statusCode})`));
+                }
+            }
+            catch (err) {
+                reject(err);
+            }
+        })
+            .on('error', err => {
+            reject(err);
+        });
+    });
+}
+function getMD5FromFile() {
+    const fileBuffer = fs_1.default.readFileSync(`intro-skipper-v${version}.zip`);
+    return crypto_1.default.createHash('md5').update(fileBuffer).digest('hex');
+}
+function updateDocsVersion(docsPath) {
+    const readMeContent = fs_1.default.readFileSync(docsPath, 'utf8');
+    const updatedContent = readMeContent.replace(/Jellyfin.*\(or newer\)/, `Jellyfin ${currentVersion} (or newer)`);
+    if (readMeContent !== updatedContent) {
+        fs_1.default.writeFileSync(docsPath, updatedContent);
+        core.info(`Updated ${docsPath} with new Jellyfin version.`);
+    }
+    else {
+        core.info(`${docsPath} has already newest Jellyfin version.`);
+    }
+}
+function cleanUpOldReleases() {
+    // Extract all unique targetAbi values
+    const abiSet = new Set();
+    for (const entry of jsonData) {
+        for (const v of entry.versions) {
+            abiSet.add(v.targetAbi);
+        }
+    }
+    // Convert the Set to an array and sort it in descending order
+    const abiArray = Array.from(abiSet).sort((a, b) => {
+        const aParts = a.split('.').map(Number);
+        const bParts = b.split('.').map(Number);
+        for (let i = 0; i < aParts.length; i++) {
+            if (aParts[i] > bParts[i])
+                return -1;
+            if (aParts[i] < bParts[i])
+                return 1;
+        }
+        return 0;
+    });
+    // Identify the highest and second highest targetAbi
+    const highestAbi = abiArray[0];
+    const secondHighestAbi = abiArray[1];
+    // Filter the versions array to keep only those with the highest or second highest targetAbi
+    for (const entry of jsonData) {
+        entry.versions = entry.versions.filter(v => v.targetAbi === highestAbi || v.targetAbi === secondHighestAbi);
+    }
+}
+async function getNugetPackageVersion(packageName, versionPattern) {
+    // Convert package name to lowercase for the NuGet API
+    const url = `https://api.nuget.org/v3-flatcontainer/${packageName.toLowerCase()}/index.json`;
+    try {
+        // Fetch data using the built-in fetch API
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`Failed to fetch package information: ${response.statusText}`);
+        }
+        const data = await response.json();
+        const versions = data.versions;
+        // Create a regular expression from the version pattern
+        const versionRegex = new RegExp(versionPattern.replace(/\./g, '\\.').replace('*', '.*'));
+        // Filter versions based on the provided pattern
+        const matchingVersions = versions.filter(v => versionRegex.test(v.version));
+        // Check if there are any matching versions
+        if (matchingVersions.length > 0) {
+            const latestVersion = matchingVersions[matchingVersions.length - 1];
+            core.info(`Latest version of ${packageName} matching ${versionPattern}: ${latestVersion}`);
+            return latestVersion;
+        }
+        else {
+            core.setFailed(`No versions of ${packageName} match the pattern ${versionPattern}`);
+        }
+    }
+    catch (error) {
+        core.setFailed(`Error fetching package information for ${packageName}: ${error instanceof Error ? error.message : String(error)}`);
+    }
 }
 
 
@@ -26889,23 +27156,13 @@ module.exports = parseParams
 /******/ 	if (typeof __nccwpck_require__ !== 'undefined') __nccwpck_require__.ab = __dirname + "/";
 /******/ 	
 /************************************************************************/
-var __webpack_exports__ = {};
-// This entry need to be wrapped in an IIFE because it need to be in strict mode.
-(() => {
-"use strict";
-var exports = __webpack_exports__;
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-/**
- * The entrypoint for the action.
- */
-const main_1 = __nccwpck_require__(399);
-// eslint-disable-next-line @typescript-eslint/no-floating-promises
-(0, main_1.run)();
-
-})();
-
-module.exports = __webpack_exports__;
+/******/ 	
+/******/ 	// startup
+/******/ 	// Load entry module and return exports
+/******/ 	// This entry module is referenced by other modules so it can't be inlined
+/******/ 	var __webpack_exports__ = __nccwpck_require__(6144);
+/******/ 	module.exports = __webpack_exports__;
+/******/ 	
 /******/ })()
 ;
 //# sourceMappingURL=index.js.map
