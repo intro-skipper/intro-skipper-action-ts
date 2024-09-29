@@ -25080,6 +25080,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.updateManifest = updateManifest;
+exports.updateDocsVersion = updateDocsVersion;
+exports.cleanUpOldReleases = cleanUpOldReleases;
+exports.filterVersions = filterVersions;
 const core = __importStar(__nccwpck_require__(7484));
 const https_1 = __importDefault(__nccwpck_require__(5692));
 const crypto_1 = __importDefault(__nccwpck_require__(6982));
@@ -25105,29 +25108,50 @@ const bugReportFormPath = './.github/ISSUE_TEMPLATE/bug_report_form.yml';
 if (!fs_1.default.existsSync(bugReportFormPath)) {
     core.setFailed(`${bugReportFormPath} file not found`);
 }
-const jsonData = JSON.parse(fs_1.default.readFileSync(manifestPath, 'utf8'));
 async function updateManifest() {
+    let jsonData = JSON.parse(fs_1.default.readFileSync(manifestPath, 'utf8'));
     try {
         currentVersion = await getNugetPackageVersion('Jellyfin.Model', '10.*-*');
+        if (currentVersion == null) {
+            core.setFailed('Failed to get current version of Jellyfin.Model');
+            return;
+        }
         targetAbi = `${currentVersion}.0`;
         const newVersion = {
-            version,
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            version: version,
             changelog: `- See the full changelog at [GitHub](https://github.com/${repository}/releases/tag/10.9/v${version})\n`,
             targetAbi,
             sourceUrl: `https://github.com/${repository}/releases/download/10.9/v${version}/intro-skipper-v${version}.zip`,
-            checksum: getMD5FromFile(),
+            checksum: getMD5FromFile(`intro-skipper-v${version}.zip`),
             timestamp: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
         };
-        console.log(`Repo is ${gitHubRepoVisibilty}.`);
+        core.info(`Repo is ${gitHubRepoVisibilty}.`);
         if (gitHubRepoVisibilty === 'public') {
             await validVersion(newVersion);
         }
         // Add the new version to the manifest
         jsonData[0].versions.unshift(newVersion);
         core.info('Manifest updated successfully.');
-        updateDocsVersion(readmePath);
-        updateDocsVersion(bugReportFormPath);
-        cleanUpOldReleases();
+        const readmeContent = fs_1.default.readFileSync(readmePath, 'utf8');
+        const { updatedContent: updatedReadme, wasUpdated: readmeWasUpdated } = updateDocsVersion(readmeContent, currentVersion);
+        if (readmeWasUpdated) {
+            fs_1.default.writeFileSync(readmePath, updatedReadme);
+            core.info(`Updated ${readmePath} with new Jellyfin version.`);
+        }
+        else {
+            core.info(`${readmePath} has already newest Jellyfin version.`);
+        }
+        const bugReportFormContent = fs_1.default.readFileSync(bugReportFormPath, 'utf8');
+        const { updatedContent: updatedBugReport, wasUpdated: bugReportWasUpdated } = updateDocsVersion(bugReportFormContent, currentVersion);
+        if (bugReportWasUpdated) {
+            fs_1.default.writeFileSync(bugReportFormPath, updatedBugReport);
+            core.info(`Updated ${bugReportFormPath} with new Jellyfin version.`);
+        }
+        else {
+            core.info(`${bugReportFormPath} has already newest Jellyfin version.`);
+        }
+        jsonData = cleanUpOldReleases(jsonData);
         // Write the modified JSON data back to the file
         fs_1.default.writeFileSync(manifestPath, JSON.stringify(jsonData, null, 4), 'utf8');
         core.info('All operations completed successfully.');
@@ -25197,22 +25221,24 @@ async function downloadAndHashFile(url, redirects = 5) {
         });
     });
 }
-function getMD5FromFile() {
-    const fileBuffer = fs_1.default.readFileSync(`intro-skipper-v${version}.zip`);
+function getMD5FromFile(file) {
+    if (!fs_1.default.existsSync(file)) {
+        core.setFailed(`File ${file} not found`);
+        return '';
+    }
+    const fileBuffer = fs_1.default.readFileSync(file);
     return crypto_1.default.createHash('md5').update(fileBuffer).digest('hex');
 }
-function updateDocsVersion(docsPath) {
-    const readMeContent = fs_1.default.readFileSync(docsPath, 'utf8');
-    const updatedContent = readMeContent.replace(/Jellyfin.*\(or newer\)/, `Jellyfin ${currentVersion} (or newer)`);
-    if (readMeContent !== updatedContent) {
-        fs_1.default.writeFileSync(docsPath, updatedContent);
-        core.info(`Updated ${docsPath} with new Jellyfin version.`);
+function updateDocsVersion(content, currentVersion) {
+    if (currentVersion == null) {
+        core.setFailed('Failed to get current version of Jellyfin.Model');
+        return { updatedContent: content, wasUpdated: false };
     }
-    else {
-        core.info(`${docsPath} has already newest Jellyfin version.`);
-    }
+    const updatedContent = content.replace(/Jellyfin.*\(or newer\)/, `Jellyfin ${currentVersion} (or newer)`);
+    const wasUpdated = content !== updatedContent;
+    return { updatedContent, wasUpdated };
 }
-function cleanUpOldReleases() {
+function cleanUpOldReleases(jsonData) {
     // Extract all unique targetAbi values
     const abiSet = new Set();
     for (const entry of jsonData) {
@@ -25236,28 +25262,40 @@ function cleanUpOldReleases() {
     const highestAbi = abiArray[0];
     const secondHighestAbi = abiArray[1];
     // Filter the versions array to keep only those with the highest or second highest targetAbi
-    for (const entry of jsonData) {
-        entry.versions = entry.versions.filter(v => v.targetAbi === highestAbi || v.targetAbi === secondHighestAbi);
-    }
+    return jsonData.map(entry => ({
+        ...entry,
+        versions: entry.versions.filter(v => v.targetAbi === highestAbi || v.targetAbi === secondHighestAbi)
+    }));
 }
-async function getNugetPackageVersion(packageName, versionPattern) {
-    // Convert package name to lowercase for the NuGet API
+async function fetchNugetPackageVersions(packageName) {
     const url = `https://api.nuget.org/v3-flatcontainer/${packageName.toLowerCase()}/index.json`;
     try {
-        // Fetch data using the built-in fetch API
         const response = await fetch(url);
         if (!response.ok) {
             throw new Error(`Failed to fetch package information: ${response.statusText}`);
         }
-        const data = await response.json();
-        const versions = data.versions;
-        // Create a regular expression from the version pattern
-        const versionRegex = new RegExp(versionPattern.replace(/\./g, '\\.').replace('*', '.*'));
-        // Filter versions based on the provided pattern
-        const matchingVersions = versions.filter(v => versionRegex.test(v));
-        // Check if there are any matching versions
-        if (matchingVersions.length > 0) {
-            const latestVersion = matchingVersions[matchingVersions.length - 1];
+        const data = (await response.json());
+        return data.versions;
+    }
+    catch (error) {
+        throw new Error(`Error fetching package information for ${packageName}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+}
+function filterVersions(versions, versionPattern) {
+    const versionRegex = new RegExp(versionPattern.replace(/\./g, '\\.').replace('*', '.*'));
+    const matchingVersions = versions.filter(v => versionRegex.test(v));
+    if (matchingVersions.length > 0) {
+        const latestVersion = matchingVersions[matchingVersions.length - 1];
+        return latestVersion;
+    }
+    core.setFailed(`No versions match the pattern ${versionPattern}`);
+    return undefined;
+}
+async function getNugetPackageVersion(packageName, versionPattern) {
+    try {
+        const versions = await fetchNugetPackageVersions(packageName);
+        const latestVersion = filterVersions(versions, versionPattern);
+        if (latestVersion) {
             core.info(`Latest version of ${packageName} matching ${versionPattern}: ${latestVersion}`);
             return latestVersion;
         }
@@ -25266,8 +25304,10 @@ async function getNugetPackageVersion(packageName, versionPattern) {
         }
     }
     catch (error) {
-        core.setFailed(`Error fetching package information for ${packageName}: ${error instanceof Error ? error.message : String(error)}`);
+        core.setFailed(String(error));
     }
+    core.setFailed(`Something went wrong while fetching ${packageName}`);
+    return '';
 }
 
 

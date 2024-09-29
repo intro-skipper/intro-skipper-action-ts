@@ -8,16 +8,31 @@ import { URL } from 'url'
 const repository = process.env.GITHUB_REPOSITORY
 const version = process.env.NEW_FILE_VERSION
 const gitHubRepoVisibilty = process.env.GITHUB_REPO_VISIBILITY
-let currentVersion: Version | undefined
+let currentVersion: string
 let targetAbi = ''
 
+type Manifest = {
+  guid: string
+  name: string
+  overview: string
+  description: string
+  owner: string
+  category: string
+  imageUrl: string
+  versions: Version[]
+}
+
 type Version = {
-  version: string | undefined
+  version: string
   changelog: string
   targetAbi: string
   sourceUrl: string
   checksum: string
   timestamp: string
+}
+
+type Nuget = {
+  versions: string[]
 }
 
 // Read manifest.json
@@ -38,22 +53,27 @@ if (!fs.existsSync(bugReportFormPath)) {
   core.setFailed(`${bugReportFormPath} file not found`)
 }
 
-const jsonData = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
-
 export async function updateManifest(): Promise<void> {
+  let jsonData: Manifest[] = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
+
   try {
     currentVersion = await getNugetPackageVersion('Jellyfin.Model', '10.*-*')
+    if (currentVersion == null) {
+      core.setFailed('Failed to get current version of Jellyfin.Model')
+      return
+    }
     targetAbi = `${currentVersion}.0`
     const newVersion = {
-      version,
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      version: version!,
       changelog: `- See the full changelog at [GitHub](https://github.com/${repository}/releases/tag/10.9/v${version})\n`,
       targetAbi,
       sourceUrl: `https://github.com/${repository}/releases/download/10.9/v${version}/intro-skipper-v${version}.zip`,
-      checksum: getMD5FromFile(),
+      checksum: getMD5FromFile(`intro-skipper-v${version}.zip`),
       timestamp: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
     }
 
-    console.log(`Repo is ${gitHubRepoVisibilty}.`)
+    core.info(`Repo is ${gitHubRepoVisibilty}.`)
     if (gitHubRepoVisibilty === 'public') {
       await validVersion(newVersion)
     }
@@ -62,10 +82,29 @@ export async function updateManifest(): Promise<void> {
     jsonData[0].versions.unshift(newVersion)
 
     core.info('Manifest updated successfully.')
-    updateDocsVersion(readmePath)
-    updateDocsVersion(bugReportFormPath)
+    const readmeContent = fs.readFileSync(readmePath, 'utf8')
+    const { updatedContent: updatedReadme, wasUpdated: readmeWasUpdated } =
+      updateDocsVersion(readmeContent, currentVersion)
+    if (readmeWasUpdated) {
+      fs.writeFileSync(readmePath, updatedReadme)
+      core.info(`Updated ${readmePath} with new Jellyfin version.`)
+    } else {
+      core.info(`${readmePath} has already newest Jellyfin version.`)
+    }
 
-    cleanUpOldReleases()
+    const bugReportFormContent = fs.readFileSync(bugReportFormPath, 'utf8')
+    const {
+      updatedContent: updatedBugReport,
+      wasUpdated: bugReportWasUpdated
+    } = updateDocsVersion(bugReportFormContent, currentVersion)
+    if (bugReportWasUpdated) {
+      fs.writeFileSync(bugReportFormPath, updatedBugReport)
+      core.info(`Updated ${bugReportFormPath} with new Jellyfin version.`)
+    } else {
+      core.info(`${bugReportFormPath} has already newest Jellyfin version.`)
+    }
+
+    jsonData = cleanUpOldReleases(jsonData)
 
     // Write the modified JSON data back to the file
     fs.writeFileSync(manifestPath, JSON.stringify(jsonData, null, 4), 'utf8')
@@ -150,31 +189,36 @@ async function downloadAndHashFile(
   })
 }
 
-function getMD5FromFile(): string {
-  const fileBuffer = fs.readFileSync(`intro-skipper-v${version}.zip`)
+function getMD5FromFile(file: string): string {
+  if (!fs.existsSync(file)) {
+    core.setFailed(`File ${file} not found`)
+    return ''
+  }
+  const fileBuffer = fs.readFileSync(file)
   return crypto.createHash('md5').update(fileBuffer).digest('hex')
 }
 
-function updateDocsVersion(docsPath: string): void {
-  const readMeContent = fs.readFileSync(docsPath, 'utf8')
-
-  const updatedContent = readMeContent.replace(
+export function updateDocsVersion(
+  content: string,
+  currentVersion?: string
+): { updatedContent: string; wasUpdated: boolean } {
+  if (currentVersion == null) {
+    core.setFailed('Failed to get current version of Jellyfin.Model')
+    return { updatedContent: content, wasUpdated: false }
+  }
+  const updatedContent = content.replace(
     /Jellyfin.*\(or newer\)/,
     `Jellyfin ${currentVersion} (or newer)`
   )
-  if (readMeContent !== updatedContent) {
-    fs.writeFileSync(docsPath, updatedContent)
-    core.info(`Updated ${docsPath} with new Jellyfin version.`)
-  } else {
-    core.info(`${docsPath} has already newest Jellyfin version.`)
-  }
+  const wasUpdated = content !== updatedContent
+  return { updatedContent, wasUpdated }
 }
 
-function cleanUpOldReleases(): void {
+export function cleanUpOldReleases(jsonData: Manifest[]): Manifest[] {
   // Extract all unique targetAbi values
   const abiSet = new Set()
   for (const entry of jsonData) {
-    for (const v of entry.versions as Version[]) {
+    for (const v of entry.versions) {
       abiSet.add(v.targetAbi)
     }
   }
@@ -196,22 +240,20 @@ function cleanUpOldReleases(): void {
   const secondHighestAbi = abiArray[1]
 
   // Filter the versions array to keep only those with the highest or second highest targetAbi
-  for (const entry of jsonData) {
-    entry.versions = (entry.versions as Version[]).filter(
+  return jsonData.map(entry => ({
+    ...entry,
+    versions: entry.versions.filter(
       v => v.targetAbi === highestAbi || v.targetAbi === secondHighestAbi
     )
-  }
+  }))
 }
 
-async function getNugetPackageVersion(
-  packageName: string,
-  versionPattern: string
-): Promise<Version | undefined> {
-  // Convert package name to lowercase for the NuGet API
+async function fetchNugetPackageVersions(
+  packageName: string
+): Promise<string[]> {
   const url = `https://api.nuget.org/v3-flatcontainer/${packageName.toLowerCase()}/index.json`
 
   try {
-    // Fetch data using the built-in fetch API
     const response = await fetch(url)
 
     if (!response.ok) {
@@ -220,22 +262,43 @@ async function getNugetPackageVersion(
       )
     }
 
-    const data = await response.json()
-    const versions: Version[] = data.versions
-
-    // Create a regular expression from the version pattern
-    const versionRegex = new RegExp(
-      versionPattern.replace(/\./g, '\\.').replace('*', '.*')
+    const data = (await response.json()) as Nuget
+    return data.versions
+  } catch (error) {
+    throw new Error(
+      `Error fetching package information for ${packageName}: ${
+        error instanceof Error ? error.message : String(error)
+      }`
     )
+  }
+}
 
-    // Filter versions based on the provided pattern
-    const matchingVersions = versions.filter(v =>
-      versionRegex.test(v as unknown as string)
-    )
+export function filterVersions(
+  versions: string[],
+  versionPattern: string
+): string | undefined {
+  const versionRegex = new RegExp(
+    versionPattern.replace(/\./g, '\\.').replace('*', '.*')
+  )
+  const matchingVersions = versions.filter(v => versionRegex.test(v))
 
-    // Check if there are any matching versions
-    if (matchingVersions.length > 0) {
-      const latestVersion = matchingVersions[matchingVersions.length - 1]
+  if (matchingVersions.length > 0) {
+    const latestVersion = matchingVersions[matchingVersions.length - 1]
+    return latestVersion
+  }
+  core.setFailed(`No versions match the pattern ${versionPattern}`)
+  return undefined
+}
+
+async function getNugetPackageVersion(
+  packageName: string,
+  versionPattern: string
+): Promise<string> {
+  try {
+    const versions = await fetchNugetPackageVersions(packageName)
+    const latestVersion = filterVersions(versions, versionPattern)
+
+    if (latestVersion) {
       core.info(
         `Latest version of ${packageName} matching ${versionPattern}: ${latestVersion}`
       )
@@ -246,10 +309,8 @@ async function getNugetPackageVersion(
       )
     }
   } catch (error) {
-    core.setFailed(
-      `Error fetching package information for ${packageName}: ${
-        error instanceof Error ? error.message : String(error)
-      }`
-    )
+    core.setFailed(String(error))
   }
+  core.setFailed(`Something went wrong while fetching ${packageName}`)
+  return ''
 }
