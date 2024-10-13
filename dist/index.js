@@ -25797,6 +25797,8 @@ const url_1 = __nccwpck_require__(7016);
 const repository = process.env.GITHUB_REPOSITORY;
 const version = process.env.NEW_FILE_VERSION;
 const gitHubRepoVisibilty = process.env.GITHUB_REPO_VISIBILITY;
+const forcedCurrentVersion = process.env.CURRENT_VERSION;
+const mainVersion = process.env.MAIN_VERSION;
 let currentVersion;
 let targetAbi = '';
 // Read manifest.json
@@ -25817,18 +25819,23 @@ if (!fs_1.default.existsSync(bugReportFormPath)) {
 async function updateManifest() {
     let jsonData = JSON.parse(fs_1.default.readFileSync(manifestPath, 'utf8'));
     try {
-        currentVersion = await getNugetPackageVersion('Jellyfin.Model', '10.*-*');
-        if (currentVersion == null) {
-            core.setFailed('Failed to get current version of Jellyfin.Model');
-            return;
+        if (!forcedCurrentVersion) {
+            currentVersion = await getNugetPackageVersion('Jellyfin.Model', mainVersion + '.*-*');
+            if (currentVersion == null) {
+                core.setFailed('Failed to get current version of Jellyfin.Model');
+                return;
+            }
+        }
+        else {
+            currentVersion = forcedCurrentVersion;
         }
         targetAbi = `${currentVersion}.0`;
         const newVersion = {
             // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
             version: version,
-            changelog: `- See the full changelog at [GitHub](https://github.com/${repository}/releases/tag/10.9/v${version})\n`,
+            changelog: `- See the full changelog at [GitHub](https://github.com/${repository}/releases/tag/${mainVersion}/v${version})\n`,
             targetAbi,
-            sourceUrl: `https://github.com/${repository}/releases/download/10.9/v${version}/intro-skipper-v${version}.zip`,
+            sourceUrl: `https://github.com/${repository}/releases/download/${mainVersion}/v${version}/intro-skipper-v${version}.zip`,
             checksum: getMD5FromFile(`intro-skipper-v${version}.zip`),
             timestamp: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
         };

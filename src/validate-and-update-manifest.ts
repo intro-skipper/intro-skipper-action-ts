@@ -8,6 +8,8 @@ import { URL } from 'url'
 const repository = process.env.GITHUB_REPOSITORY
 const version = process.env.NEW_FILE_VERSION
 const gitHubRepoVisibilty = process.env.GITHUB_REPO_VISIBILITY
+const forcedCurrentVersion = process.env.CURRENT_VERSION
+const mainVersion = process.env.MAIN_VERSION
 let currentVersion: string
 let targetAbi = ''
 
@@ -57,18 +59,25 @@ export async function updateManifest(): Promise<void> {
   let jsonData: Manifest[] = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
 
   try {
-    currentVersion = await getNugetPackageVersion('Jellyfin.Model', '10.*-*')
-    if (currentVersion == null) {
-      core.setFailed('Failed to get current version of Jellyfin.Model')
-      return
+    if (!forcedCurrentVersion) {
+      currentVersion = await getNugetPackageVersion(
+        'Jellyfin.Model',
+        mainVersion + '.*-*'
+      )
+      if (currentVersion == null) {
+        core.setFailed('Failed to get current version of Jellyfin.Model')
+        return
+      }
+    } else {
+      currentVersion = forcedCurrentVersion
     }
     targetAbi = `${currentVersion}.0`
     const newVersion = {
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       version: version!,
-      changelog: `- See the full changelog at [GitHub](https://github.com/${repository}/releases/tag/10.9/v${version})\n`,
+      changelog: `- See the full changelog at [GitHub](https://github.com/${repository}/releases/tag/${mainVersion}/v${version})\n`,
       targetAbi,
-      sourceUrl: `https://github.com/${repository}/releases/download/10.9/v${version}/intro-skipper-v${version}.zip`,
+      sourceUrl: `https://github.com/${repository}/releases/download/${mainVersion}/v${version}/intro-skipper-v${version}.zip`,
       checksum: getMD5FromFile(`intro-skipper-v${version}.zip`),
       timestamp: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
     }
