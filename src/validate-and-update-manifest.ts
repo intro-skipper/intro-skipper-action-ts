@@ -8,7 +8,7 @@ import { URL } from 'url'
 const repository = process.env.GITHUB_REPOSITORY
 const version = process.env.NEW_FILE_VERSION
 const gitHubRepoVisibilty = process.env.GITHUB_REPO_VISIBILITY
-const forcedCurrentVersion = process.env.CURRENT_VERSION
+const isBeta = process.env.IS_BETA
 const mainVersion = process.env.MAIN_VERSION
 let currentVersion: string
 let targetAbi = ''
@@ -59,7 +59,7 @@ export async function updateManifest(): Promise<void> {
   let jsonData: Manifest[] = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
 
   try {
-    if (!forcedCurrentVersion) {
+    if (mainVersion && isBeta === 'false') {
       currentVersion = await getNugetPackageVersion(
         'Jellyfin.Model',
         mainVersion + '.*-*'
@@ -69,7 +69,7 @@ export async function updateManifest(): Promise<void> {
         return
       }
     } else {
-      currentVersion = forcedCurrentVersion
+      currentVersion = `${mainVersion}.0`
     }
     targetAbi = `${currentVersion}.0`
     const newVersion = {

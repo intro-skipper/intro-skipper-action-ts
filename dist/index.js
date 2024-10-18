@@ -25797,7 +25797,7 @@ const url_1 = __nccwpck_require__(7016);
 const repository = process.env.GITHUB_REPOSITORY;
 const version = process.env.NEW_FILE_VERSION;
 const gitHubRepoVisibilty = process.env.GITHUB_REPO_VISIBILITY;
-const forcedCurrentVersion = process.env.CURRENT_VERSION;
+const isBeta = process.env.IS_BETA;
 const mainVersion = process.env.MAIN_VERSION;
 let currentVersion;
 let targetAbi = '';
@@ -25819,7 +25819,7 @@ if (!fs_1.default.existsSync(bugReportFormPath)) {
 async function updateManifest() {
     let jsonData = JSON.parse(fs_1.default.readFileSync(manifestPath, 'utf8'));
     try {
-        if (!forcedCurrentVersion) {
+        if (mainVersion && isBeta === 'false') {
             currentVersion = await getNugetPackageVersion('Jellyfin.Model', mainVersion + '.*-*');
             if (currentVersion == null) {
                 core.setFailed('Failed to get current version of Jellyfin.Model');
@@ -25827,7 +25827,7 @@ async function updateManifest() {
             }
         }
         else {
-            currentVersion = forcedCurrentVersion;
+            currentVersion = `${mainVersion}.0`;
         }
         targetAbi = `${currentVersion}.0`;
         const newVersion = {
