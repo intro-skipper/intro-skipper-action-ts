@@ -10,7 +10,7 @@ export function incrementVersion(version: string): string {
 }
 
 export async function updateVersion(
-  csprojPath = './ConfusedPolarBear.Plugin.IntroSkipper/ConfusedPolarBear.Plugin.IntroSkipper.csproj',
+  csprojPath = './IntroSkipper/IntroSkipper.csproj',
   fileSystem: typeof fs = fs,
   logger: typeof core = core
 ): Promise<void> {

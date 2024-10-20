@@ -25718,7 +25718,7 @@ function incrementVersion(version) {
     parts[parts.length - 1] += 1; // Increment the last part of the version
     return parts.join('.');
 }
-async function updateVersion(csprojPath = './ConfusedPolarBear.Plugin.IntroSkipper/ConfusedPolarBear.Plugin.IntroSkipper.csproj', fileSystem = fs_1.default, logger = core) {
+async function updateVersion(csprojPath = './IntroSkipper/IntroSkipper.csproj', fileSystem = fs_1.default, logger = core) {
     if (!fileSystem.existsSync(csprojPath)) {
         logger.setFailed(`${csprojPath} file not found`);
         return;
