@@ -64,7 +64,7 @@ describe('cleanUpOldReleases', () => {
     // Check if only 3 versions are kept (2 with 10.9.0 and 1 with 10.8.0)
     expect(result[0].versions.length).toBe(3)
     // Check if the kept versions have the correct targetAbi values
-    expect(result[0].versions.map(v => v.targetAbi).sort()).toEqual([
+    expect(result[0].versions.map((v) => v.targetAbi).sort()).toEqual([
       '10.8.0',
       '10.9.0',
       '10.9.0'

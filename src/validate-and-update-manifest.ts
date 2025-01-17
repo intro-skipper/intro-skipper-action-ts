@@ -73,7 +73,6 @@ export async function updateManifest(): Promise<void> {
     }
     targetAbi = `${currentVersion}.0`
     const newVersion = {
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       version: version!,
       changelog: `- See the full changelog at [GitHub](https://github.com/${repository}/releases/tag/${mainVersion}/v${version})\n`,
       targetAbi,
@@ -161,7 +160,7 @@ async function downloadAndHashFile(
 
   return new Promise((resolve, reject) => {
     https
-      .get(url, async response => {
+      .get(url, async (response) => {
         try {
           if (
             response.statusCode != null &&
@@ -182,7 +181,7 @@ async function downloadAndHashFile(
             response.on('end', () => {
               resolve(hash.digest('hex'))
             })
-            response.on('error', err => {
+            response.on('error', (err) => {
               reject(err)
             })
           } else {
@@ -192,7 +191,7 @@ async function downloadAndHashFile(
           reject(err)
         }
       })
-      .on('error', err => {
+      .on('error', (err) => {
         reject(err)
       })
   })
@@ -249,10 +248,10 @@ export function cleanUpOldReleases(jsonData: Manifest[]): Manifest[] {
   const secondHighestAbi = abiArray[1]
 
   // Filter the versions array to keep only those with the highest or second highest targetAbi
-  return jsonData.map(entry => ({
+  return jsonData.map((entry) => ({
     ...entry,
     versions: entry.versions.filter(
-      v => v.targetAbi === highestAbi || v.targetAbi === secondHighestAbi
+      (v) => v.targetAbi === highestAbi || v.targetAbi === secondHighestAbi
     )
   }))
 }
@@ -289,7 +288,7 @@ export function filterVersions(
   const versionRegex = new RegExp(
     versionPattern.replace(/\./g, '\\.').replace('*', '.*')
   )
-  const matchingVersions = versions.filter(v => versionRegex.test(v))
+  const matchingVersions = versions.filter((v) => versionRegex.test(v))
 
   if (matchingVersions.length > 0) {
     const latestVersion = matchingVersions[matchingVersions.length - 1]

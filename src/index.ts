@@ -3,8 +3,8 @@ import * as core from '@actions/core'
 /**
  * The entrypoint for the action.
  */
-import { updateManifest } from './validate-and-update-manifest'
-import { updateVersion } from './update-version'
+import { updateManifest } from './validate-and-update-manifest.js'
+import { updateVersion } from './update-version.js'
 
 const taskType = core.getInput('task-type')
 
