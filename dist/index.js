@@ -27332,7 +27332,8 @@ async function updateManifest() {
         else {
             coreExports.info(`${bugReportFormPath} has already newest Jellyfin version.`);
         }
-        jsonData = cleanUpOldReleases(jsonData);
+        // Clean up old releases
+        jsonData[0] = cleanUpOldReleases([jsonData[0]])[0];
         // Write the modified JSON data back to the file
         fs.writeFileSync(manifestPath, JSON.stringify(jsonData, null, 4), 'utf8');
         coreExports.info('All operations completed successfully.');
