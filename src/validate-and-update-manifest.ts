@@ -56,7 +56,7 @@ if (!fs.existsSync(bugReportFormPath)) {
 }
 
 export async function updateManifest(): Promise<void> {
-  let jsonData: Manifest[] = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
+  const jsonData: Manifest[] = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
 
   try {
     if (mainVersion && isBeta === 'false') {
