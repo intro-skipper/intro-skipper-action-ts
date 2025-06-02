@@ -16,10 +16,6 @@ type Nuget = {
   versions: string[]
 }
 
-if (!token) {
-  core.setFailed('GITHUB_PAT environment variable is not set')
-}
-
 // Read README.md
 const readmePath = './README.md'
 if (!fs.existsSync(readmePath)) {
@@ -33,6 +29,9 @@ if (!fs.existsSync(bugReportFormPath)) {
 }
 
 export async function updateManifest(): Promise<void> {
+  if (!token) {
+    core.setFailed('GITHUB_PAT environment variable is not set')
+  }
   try {
     if (mainVersion && isBeta === 'false') {
       currentVersion = await getNugetPackageVersion(

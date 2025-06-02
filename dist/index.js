@@ -27278,9 +27278,6 @@ const mainVersion = process.env.MAIN_VERSION;
 const token = process.env.GITHUB_PAT;
 let currentVersion;
 let targetAbi = '';
-if (!token) {
-    coreExports.setFailed('GITHUB_PAT environment variable is not set');
-}
 // Read README.md
 const readmePath = './README.md';
 if (!fs.existsSync(readmePath)) {
@@ -27292,6 +27289,9 @@ if (!fs.existsSync(bugReportFormPath)) {
     coreExports.setFailed(`${bugReportFormPath} file not found`);
 }
 async function updateManifest() {
+    if (!token) {
+        coreExports.setFailed('GITHUB_PAT environment variable is not set');
+    }
     try {
         if (mainVersion && isBeta === 'false') {
             currentVersion = await getNugetPackageVersion('Jellyfin.Model', mainVersion + '.*-*');
