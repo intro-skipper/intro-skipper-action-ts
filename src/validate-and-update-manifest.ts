@@ -7,11 +7,17 @@ const repository = process.env.GITHUB_REPOSITORY
 const version = process.env.NEW_FILE_VERSION
 const isBeta = process.env.IS_BETA
 const mainVersion = process.env.MAIN_VERSION
+const token = process.env.GITHUB_PAT
+
 let currentVersion: string
 let targetAbi = ''
 
 type Nuget = {
   versions: string[]
+}
+
+if (!token) {
+  core.setFailed('GITHUB_PAT environment variable is not set')
 }
 
 // Read README.md
@@ -64,8 +70,6 @@ export async function updateManifest(): Promise<void> {
       apiUrl = `https://api.github.com/repos/intro-skipper/manifest/dispatches`
     }
 
-    const token = process.env.GITHUB_PAT
-
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
@@ -94,6 +98,16 @@ export async function updateManifest(): Promise<void> {
       )
       const errorText = await response.text()
       console.error('Error details:', errorText)
+    }
+
+    const readmeContent = fs.readFileSync(readmePath, 'utf8')
+    const { updatedContent: updatedReadme, wasUpdated: readmeWasUpdated } =
+      updateDocsVersion(readmeContent, currentVersion)
+    if (readmeWasUpdated) {
+      fs.writeFileSync(readmePath, updatedReadme)
+      core.info(`Updated ${readmePath} with new Jellyfin version.`)
+    } else {
+      core.info(`${readmePath} has already newest Jellyfin version.`)
     }
 
     const bugReportFormContent = fs.readFileSync(bugReportFormPath, 'utf8')

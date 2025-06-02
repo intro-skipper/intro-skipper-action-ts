@@ -27275,8 +27275,12 @@ const repository = process.env.GITHUB_REPOSITORY;
 const version = process.env.NEW_FILE_VERSION;
 const isBeta = process.env.IS_BETA;
 const mainVersion = process.env.MAIN_VERSION;
+const token = process.env.GITHUB_PAT;
 let currentVersion;
 let targetAbi = '';
+if (!token) {
+    coreExports.setFailed('GITHUB_PAT environment variable is not set');
+}
 // Read README.md
 const readmePath = './README.md';
 if (!fs.existsSync(readmePath)) {
@@ -27320,7 +27324,6 @@ async function updateManifest() {
         else {
             apiUrl = `https://api.github.com/repos/intro-skipper/manifest/dispatches`;
         }
-        const token = process.env.GITHUB_PAT;
         const response = await fetch(apiUrl, {
             method: 'POST',
             headers: {
@@ -27346,6 +27349,15 @@ async function updateManifest() {
             console.error(`Failed to trigger dispatch event. Status: ${response.status}`);
             const errorText = await response.text();
             console.error('Error details:', errorText);
+        }
+        const readmeContent = fs.readFileSync(readmePath, 'utf8');
+        const { updatedContent: updatedReadme, wasUpdated: readmeWasUpdated } = updateDocsVersion(readmeContent, currentVersion);
+        if (readmeWasUpdated) {
+            fs.writeFileSync(readmePath, updatedReadme);
+            coreExports.info(`Updated ${readmePath} with new Jellyfin version.`);
+        }
+        else {
+            coreExports.info(`${readmePath} has already newest Jellyfin version.`);
         }
         const bugReportFormContent = fs.readFileSync(bugReportFormPath, 'utf8');
         const { updatedContent: updatedBugReport, wasUpdated: bugReportWasUpdated } = updateDocsVersion(bugReportFormContent, currentVersion);
