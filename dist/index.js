@@ -1,30 +1,30 @@
 import require$$0 from 'os';
-import crypto from 'crypto';
+import require$$0$1 from 'crypto';
 import fs from 'fs';
 import require$$1$4 from 'path';
 import require$$2 from 'http';
 import require$$3 from 'https';
-import require$$0$3 from 'net';
+import require$$0$4 from 'net';
 import require$$1 from 'tls';
 import require$$4 from 'events';
-import require$$0$2 from 'assert';
-import require$$0$1 from 'util';
-import require$$0$4 from 'stream';
+import require$$0$3 from 'assert';
+import require$$0$2 from 'util';
+import require$$0$5 from 'stream';
 import require$$7 from 'buffer';
 import require$$8 from 'querystring';
 import require$$14 from 'stream/web';
-import require$$0$6 from 'node:stream';
+import require$$0$7 from 'node:stream';
 import require$$1$1 from 'node:util';
-import require$$0$5 from 'node:events';
-import require$$0$7 from 'worker_threads';
+import require$$0$6 from 'node:events';
+import require$$0$8 from 'worker_threads';
 import require$$2$1 from 'perf_hooks';
 import require$$5 from 'util/types';
 import require$$4$1 from 'async_hooks';
 import require$$1$2 from 'console';
-import require$$1$3, { URL as URL$1 } from 'url';
+import require$$1$3 from 'url';
 import require$$3$1 from 'zlib';
 import require$$6 from 'string_decoder';
-import require$$0$8 from 'diagnostics_channel';
+import require$$0$9 from 'diagnostics_channel';
 import require$$2$2 from 'child_process';
 import require$$6$1 from 'timers';
 
@@ -240,7 +240,7 @@ function requireFileCommand () {
 	fileCommand.prepareKeyValueMessage = fileCommand.issueFileCommand = void 0;
 	// We use any as a valid input type
 	/* eslint-disable @typescript-eslint/no-explicit-any */
-	const crypto$1 = __importStar(crypto);
+	const crypto = __importStar(require$$0$1);
 	const fs$1 = __importStar(fs);
 	const os = __importStar(require$$0);
 	const utils_1 = requireUtils$1();
@@ -258,7 +258,7 @@ function requireFileCommand () {
 	}
 	fileCommand.issueFileCommand = issueFileCommand;
 	function prepareKeyValueMessage(key, value) {
-	    const delimiter = `ghadelimiter_${crypto$1.randomUUID()}`;
+	    const delimiter = `ghadelimiter_${crypto.randomUUID()}`;
 	    const convertedValue = (0, utils_1.toCommandValue)(value);
 	    // These should realistically never happen, but just in case someone finds a
 	    // way to exploit uuid generation let's not allow keys or values that contain
@@ -395,7 +395,7 @@ function requireTunnel$1 () {
 	var http = require$$2;
 	var https = require$$3;
 	var events = require$$4;
-	var util = require$$0$1;
+	var util = require$$0$2;
 
 
 	tunnel$1.httpOverHttp = httpOverHttp;
@@ -1109,14 +1109,14 @@ function requireUtil$6 () {
 	if (hasRequiredUtil$6) return util$6;
 	hasRequiredUtil$6 = 1;
 
-	const assert = require$$0$2;
+	const assert = require$$0$3;
 	const { kDestroyed, kBodyUsed } = requireSymbols$4();
 	const { IncomingMessage } = require$$2;
-	const stream = require$$0$4;
-	const net = require$$0$3;
+	const stream = require$$0$5;
+	const net = require$$0$4;
 	const { InvalidArgumentError } = requireErrors();
 	const { Blob } = require$$7;
-	const nodeUtil = require$$0$1;
+	const nodeUtil = require$$0$2;
 	const { stringify } = require$$8;
 	const { headerNameLowerCasedRecord } = requireConstants$4();
 
@@ -1772,7 +1772,7 @@ function requireSbmh () {
 	 * Based heavily on the Streaming Boyer-Moore-Horspool C++ implementation
 	 * by Hongli Lai at: https://github.com/FooBarWidget/boyer-moore-horspool
 	 */
-	const EventEmitter = require$$0$5.EventEmitter;
+	const EventEmitter = require$$0$6.EventEmitter;
 	const inherits = require$$1$1.inherits;
 
 	function SBMH (needle) {
@@ -1983,7 +1983,7 @@ function requirePartStream () {
 	hasRequiredPartStream = 1;
 
 	const inherits = require$$1$1.inherits;
-	const ReadableStream = require$$0$6.Readable;
+	const ReadableStream = require$$0$7.Readable;
 
 	function PartStream (opts) {
 	  ReadableStream.call(this, opts);
@@ -2027,7 +2027,7 @@ function requireHeaderParser () {
 	if (hasRequiredHeaderParser) return HeaderParser_1;
 	hasRequiredHeaderParser = 1;
 
-	const EventEmitter = require$$0$5.EventEmitter;
+	const EventEmitter = require$$0$6.EventEmitter;
 	const inherits = require$$1$1.inherits;
 	const getLimit = requireGetLimit();
 
@@ -2135,7 +2135,7 @@ function requireDicer () {
 	if (hasRequiredDicer) return Dicer_1;
 	hasRequiredDicer = 1;
 
-	const WritableStream = require$$0$6.Writable;
+	const WritableStream = require$$0$7.Writable;
 	const inherits = require$$1$1.inherits;
 
 	const StreamSearch = requireSbmh();
@@ -2712,7 +2712,7 @@ function requireMultipart () {
 	//  * support limits.fieldNameSize
 	//     -- this will require modifications to utils.parseParams
 
-	const { Readable } = require$$0$6;
+	const { Readable } = require$$0$7;
 	const { inherits } = require$$1$1;
 
 	const Dicer = requireDicer();
@@ -3278,7 +3278,7 @@ function requireMain () {
 	if (hasRequiredMain) return main.exports;
 	hasRequiredMain = 1;
 
-	const WritableStream = require$$0$6.Writable;
+	const WritableStream = require$$0$7.Writable;
 	const { inherits } = require$$1$1;
 	const Dicer = requireDicer();
 
@@ -3371,7 +3371,7 @@ function requireConstants$3 () {
 	if (hasRequiredConstants$3) return constants$3;
 	hasRequiredConstants$3 = 1;
 
-	const { MessageChannel, receiveMessageOnPort } = require$$0$7;
+	const { MessageChannel, receiveMessageOnPort } = require$$0$8;
 
 	const corsSafeListedMethods = ['GET', 'HEAD', 'POST'];
 	const corsSafeListedMethodsSet = new Set(corsSafeListedMethods);
@@ -3582,7 +3582,7 @@ function requireUtil$5 () {
 	const { getGlobalOrigin } = requireGlobal$1();
 	const { performance } = require$$2$1;
 	const { isBlobLike, toUSVString, ReadableStreamFrom } = requireUtil$6();
-	const assert = require$$0$2;
+	const assert = require$$0$3;
 	const { isUint8Array } = require$$5;
 
 	let supportedHashes = [];
@@ -4747,7 +4747,7 @@ function requireWebidl () {
 	if (hasRequiredWebidl) return webidl_1;
 	hasRequiredWebidl = 1;
 
-	const { types } = require$$0$1;
+	const { types } = require$$0$2;
 	const { hasOwn, toUSVString } = requireUtil$5();
 
 	/** @type {import('../../types/webidl').Webidl} */
@@ -5400,7 +5400,7 @@ var hasRequiredDataURL;
 function requireDataURL () {
 	if (hasRequiredDataURL) return dataURL;
 	hasRequiredDataURL = 1;
-	const assert = require$$0$2;
+	const assert = require$$0$3;
 	const { atob } = require$$7;
 	const { isomorphicDecode } = requireUtil$5();
 
@@ -6038,7 +6038,7 @@ function requireFile () {
 	hasRequiredFile = 1;
 
 	const { Blob, File: NativeFile } = require$$7;
-	const { types } = require$$0$1;
+	const { types } = require$$0$2;
 	const { kState } = requireSymbols$3();
 	const { isBlobLike } = requireUtil$5();
 	const { webidl } = requireWebidl();
@@ -6678,7 +6678,7 @@ function requireBody () {
 	const { DOMException, structuredClone } = requireConstants$3();
 	const { Blob, File: NativeFile } = require$$7;
 	const { kBodyUsed } = requireSymbols$4();
-	const assert = require$$0$2;
+	const assert = require$$0$3;
 	const { isErrored } = requireUtil$6();
 	const { isUint8Array, isArrayBuffer } = require$$5;
 	const { File: UndiciFile } = requireFile();
@@ -7287,7 +7287,7 @@ function requireRequest$1 () {
 	  InvalidArgumentError,
 	  NotSupportedError
 	} = requireErrors();
-	const assert = require$$0$2;
+	const assert = require$$0$3;
 	const { kHTTP2BuildRequest, kHTTP2CopyHeaders, kHTTP1BuildRequest } = requireSymbols$4();
 	const util = requireUtil$6();
 
@@ -8017,8 +8017,8 @@ function requireConnect () {
 	if (hasRequiredConnect) return connect;
 	hasRequiredConnect = 1;
 
-	const net = require$$0$3;
-	const assert = require$$0$2;
+	const net = require$$0$4;
+	const assert = require$$0$3;
 	const util = requireUtil$6();
 	const { InvalidArgumentError, ConnectTimeoutError } = requireErrors();
 
@@ -8523,7 +8523,7 @@ function requireRedirectHandler () {
 
 	const util = requireUtil$6();
 	const { kBodyUsed } = requireSymbols$4();
-	const assert = require$$0$2;
+	const assert = require$$0$3;
 	const { InvalidArgumentError } = requireErrors();
 	const EE = require$$4;
 
@@ -8783,10 +8783,10 @@ function requireClient () {
 
 	/* global WebAssembly */
 
-	const assert = require$$0$2;
-	const net = require$$0$3;
+	const assert = require$$0$3;
+	const net = require$$0$4;
 	const http = require$$2;
-	const { pipeline } = require$$0$4;
+	const { pipeline } = require$$0$5;
 	const util = requireUtil$6();
 	const timers = requireTimers();
 	const Request = requireRequest$1();
@@ -11968,8 +11968,8 @@ function requireReadable () {
 	if (hasRequiredReadable) return readable;
 	hasRequiredReadable = 1;
 
-	const assert = require$$0$2;
-	const { Readable } = require$$0$4;
+	const assert = require$$0$3;
+	const { Readable } = require$$0$5;
 	const { RequestAbortedError, NotSupportedError, InvalidArgumentError } = requireErrors();
 	const util = requireUtil$6();
 	const { ReadableStreamFrom, toUSVString } = requireUtil$6();
@@ -12295,7 +12295,7 @@ var hasRequiredUtil$4;
 function requireUtil$4 () {
 	if (hasRequiredUtil$4) return util$4;
 	hasRequiredUtil$4 = 1;
-	const assert = require$$0$2;
+	const assert = require$$0$3;
 	const {
 	  ResponseStatusCodeError
 	} = requireErrors();
@@ -12601,7 +12601,7 @@ function requireApiStream () {
 	if (hasRequiredApiStream) return apiStream;
 	hasRequiredApiStream = 1;
 
-	const { finished, PassThrough } = require$$0$4;
+	const { finished, PassThrough } = require$$0$5;
 	const {
 	  InvalidArgumentError,
 	  InvalidReturnValueError,
@@ -12833,7 +12833,7 @@ function requireApiPipeline () {
 	  Readable,
 	  Duplex,
 	  PassThrough
-	} = require$$0$4;
+	} = require$$0$5;
 	const {
 	  InvalidArgumentError,
 	  InvalidReturnValueError,
@@ -12842,7 +12842,7 @@ function requireApiPipeline () {
 	const util = requireUtil$6();
 	const { AsyncResource } = require$$4$1;
 	const { addSignal, removeSignal } = requireAbortSignal();
-	const assert = require$$0$2;
+	const assert = require$$0$3;
 
 	const kResume = Symbol('resume');
 
@@ -13090,7 +13090,7 @@ function requireApiUpgrade () {
 	const { AsyncResource } = require$$4$1;
 	const util = requireUtil$6();
 	const { addSignal, removeSignal } = requireAbortSignal();
-	const assert = require$$0$2;
+	const assert = require$$0$3;
 
 	class UpgradeHandler extends AsyncResource {
 	  constructor (opts, callback) {
@@ -13395,7 +13395,7 @@ function requireMockUtils () {
 	  types: {
 	    isPromise
 	  }
-	} = require$$0$1;
+	} = require$$0$2;
 
 	function matchValue (match, value) {
 	  if (typeof match === 'string') {
@@ -13955,7 +13955,7 @@ function requireMockClient () {
 	if (hasRequiredMockClient) return mockClient;
 	hasRequiredMockClient = 1;
 
-	const { promisify } = require$$0$1;
+	const { promisify } = require$$0$2;
 	const Client = requireClient();
 	const { buildMockDispatch } = requireMockUtils();
 	const {
@@ -14022,7 +14022,7 @@ function requireMockPool () {
 	if (hasRequiredMockPool) return mockPool;
 	hasRequiredMockPool = 1;
 
-	const { promisify } = require$$0$1;
+	const { promisify } = require$$0$2;
 	const Pool = requirePool();
 	const { buildMockDispatch } = requireMockUtils();
 	const {
@@ -14126,7 +14126,7 @@ function requirePendingInterceptorsFormatter () {
 	if (hasRequiredPendingInterceptorsFormatter) return pendingInterceptorsFormatter;
 	hasRequiredPendingInterceptorsFormatter = 1;
 
-	const { Transform } = require$$0$4;
+	const { Transform } = require$$0$5;
 	const { Console } = require$$1$2;
 
 	/**
@@ -14549,7 +14549,7 @@ var hasRequiredRetryHandler;
 function requireRetryHandler () {
 	if (hasRequiredRetryHandler) return RetryHandler_1;
 	hasRequiredRetryHandler = 1;
-	const assert = require$$0$2;
+	const assert = require$$0$3;
 
 	const { kRetryHandlerDefaultRetry } = requireSymbols$4();
 	const { RequestRetryError } = requireErrors();
@@ -14986,9 +14986,9 @@ function requireHeaders () {
 	  isValidHeaderName,
 	  isValidHeaderValue
 	} = requireUtil$5();
-	const util = require$$0$1;
+	const util = require$$0$2;
 	const { webidl } = requireWebidl();
-	const assert = require$$0$2;
+	const assert = require$$0$3;
 
 	const kHeadersMap = Symbol('headers map');
 	const kHeadersSortedMap = Symbol('headers map sorted');
@@ -15594,8 +15594,8 @@ function requireResponse () {
 	const { getGlobalOrigin } = requireGlobal$1();
 	const { URLSerializer } = requireDataURL();
 	const { kHeadersList, kConstruct } = requireSymbols$4();
-	const assert = require$$0$2;
-	const { types } = require$$0$1;
+	const assert = require$$0$3;
+	const { types } = require$$0$2;
 
 	const ReadableStream = globalThis.ReadableStream || require$$14.ReadableStream;
 	const textEncoder = new TextEncoder('utf-8');
@@ -16178,7 +16178,7 @@ function requireRequest () {
 	const { getGlobalOrigin } = requireGlobal$1();
 	const { URLSerializer } = requireDataURL();
 	const { kHeadersList, kConstruct } = requireSymbols$4();
-	const assert = require$$0$2;
+	const assert = require$$0$3;
 	const { getMaxListeners, setMaxListeners, getEventListeners, defaultMaxListeners } = require$$4;
 
 	let TransformStream = globalThis.TransformStream;
@@ -17144,7 +17144,7 @@ function requireFetch () {
 	  urlHasHttpsScheme
 	} = requireUtil$5();
 	const { kState, kHeaders, kGuard, kRealm } = requireSymbols$3();
-	const assert = require$$0$2;
+	const assert = require$$0$3;
 	const { safelyExtractBody } = requireBody();
 	const {
 	  redirectStatusSet,
@@ -17156,7 +17156,7 @@ function requireFetch () {
 	} = requireConstants$3();
 	const { kHeadersList } = requireSymbols$4();
 	const EE = require$$4;
-	const { Readable, pipeline } = require$$0$4;
+	const { Readable, pipeline } = require$$0$5;
 	const { addAbortListener, isErrored, isReadable, nodeMajor, nodeMinor } = requireUtil$6();
 	const { dataURLProcessor, serializeAMimeType } = requireDataURL();
 	const { TransformStream } = require$$14;
@@ -19596,7 +19596,7 @@ function requireUtil$3 () {
 	const { getEncoding } = requireEncoding();
 	const { DOMException } = requireConstants$3();
 	const { serializeAMimeType, parseMIMEType } = requireDataURL();
-	const { types } = require$$0$1;
+	const { types } = require$$0$2;
 	const { StringDecoder } = require$$6;
 	const { btoa } = require$$7;
 
@@ -20350,7 +20350,7 @@ function requireUtil$2 () {
 	if (hasRequiredUtil$2) return util$2;
 	hasRequiredUtil$2 = 1;
 
-	const assert = require$$0$2;
+	const assert = require$$0$3;
 	const { URLSerializer } = requireDataURL();
 	const { isValidHeaderName } = requireUtil$5();
 
@@ -20417,7 +20417,7 @@ function requireCache () {
 	const { kState, kHeaders, kGuard, kRealm } = requireSymbols$3();
 	const { fetching } = requireFetch();
 	const { urlIsHttpHttpsScheme, createDeferredPromise, readAllBytes } = requireUtil$5();
-	const assert = require$$0$2;
+	const assert = require$$0$3;
 	const { getGlobalDispatcher } = requireGlobal();
 
 	/**
@@ -21710,7 +21710,7 @@ function requireParse () {
 	const { maxNameValuePairSize, maxAttributeValueSize } = requireConstants$1();
 	const { isCTLExcludingHtab } = requireUtil$1();
 	const { collectASequenceOfCodePointsFast } = requireDataURL();
-	const assert = require$$0$2;
+	const assert = require$$0$3;
 
 	/**
 	 * @description Parses the field-value attributes of a set-cookie header string.
@@ -22304,7 +22304,7 @@ function requireEvents () {
 
 	const { webidl } = requireWebidl();
 	const { kEnumerableProperty } = requireUtil$6();
-	const { MessagePort } = require$$0$7;
+	const { MessagePort } = require$$0$8;
 
 	/**
 	 * @see https://html.spec.whatwg.org/multipage/comms.html#messageevent
@@ -22821,7 +22821,7 @@ function requireConnection () {
 	if (hasRequiredConnection) return connection;
 	hasRequiredConnection = 1;
 
-	const diagnosticsChannel = require$$0$8;
+	const diagnosticsChannel = require$$0$9;
 	const { uid, states } = requireConstants();
 	const {
 	  kReadyState,
@@ -23201,8 +23201,8 @@ function requireReceiver () {
 	if (hasRequiredReceiver) return receiver;
 	hasRequiredReceiver = 1;
 
-	const { Writable } = require$$0$4;
-	const diagnosticsChannel = require$$0$8;
+	const { Writable } = require$$0$5;
+	const diagnosticsChannel = require$$0$9;
 	const { parserStates, opcodes, states, emptyBuffer } = requireConstants();
 	const { kReadyState, kSentClose, kResponse, kReceivedClose } = requireSymbols();
 	const { isValidStatusCode, failWebsocketConnection, websocketMessageReceived } = requireUtil();
@@ -23573,7 +23573,7 @@ function requireWebsocket () {
 	const { ByteParser } = requireReceiver();
 	const { kEnumerableProperty, isBlobLike } = requireUtil$6();
 	const { getGlobalDispatcher } = requireGlobal();
-	const { types } = require$$0$1;
+	const { types } = require$$0$2;
 
 	let experimentalWarned = false;
 
@@ -25801,7 +25801,7 @@ function requireIo () {
 	};
 	Object.defineProperty(io, "__esModule", { value: true });
 	io.findInPath = io.which = io.mkdirP = io.rmRF = io.mv = io.cp = void 0;
-	const assert_1 = require$$0$2;
+	const assert_1 = require$$0$3;
 	const path = __importStar(require$$1$4);
 	const ioUtil = __importStar(requireIoUtil());
 	/**
@@ -27273,16 +27273,10 @@ var core$1 = /*#__PURE__*/_mergeNamespaces({
 
 const repository = process.env.GITHUB_REPOSITORY;
 const version = process.env.NEW_FILE_VERSION;
-const gitHubRepoVisibilty = process.env.GITHUB_REPO_VISIBILITY;
 const isBeta = process.env.IS_BETA;
 const mainVersion = process.env.MAIN_VERSION;
 let currentVersion;
 let targetAbi = '';
-// Read manifest.json
-const manifestPath = './manifest.json';
-if (!fs.existsSync(manifestPath)) {
-    coreExports.setFailed('manifest.json file not found');
-}
 // Read README.md
 const readmePath = './README.md';
 if (!fs.existsSync(readmePath)) {
@@ -27294,7 +27288,6 @@ if (!fs.existsSync(bugReportFormPath)) {
     coreExports.setFailed(`${bugReportFormPath} file not found`);
 }
 async function updateManifest() {
-    const jsonData = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
     try {
         if (mainVersion && isBeta === 'false') {
             currentVersion = await getNugetPackageVersion('Jellyfin.Model', mainVersion + '.*-*');
@@ -27307,7 +27300,8 @@ async function updateManifest() {
             currentVersion = `${mainVersion}.0`;
         }
         targetAbi = `${currentVersion}.0`;
-        const newVersion = {
+        const client_payload = {
+            pluginName: 'Intro Skipper',
             version: version,
             changelog: `- See the full changelog at [GitHub](https://github.com/${repository}/releases/tag/${mainVersion}/v${version})\n`,
             targetAbi,
@@ -27315,21 +27309,43 @@ async function updateManifest() {
             checksum: getMD5FromFile(`intro-skipper-v${version}.zip`),
             timestamp: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
         };
-        coreExports.info(`Repo is ${gitHubRepoVisibilty}.`);
-        if (gitHubRepoVisibilty === 'public') {
-            await validVersion(newVersion);
-        }
-        // Add the new version to the manifest
-        jsonData[0].versions.unshift(newVersion);
-        coreExports.info('Manifest updated successfully.');
-        const readmeContent = fs.readFileSync(readmePath, 'utf8');
-        const { updatedContent: updatedReadme, wasUpdated: readmeWasUpdated } = updateDocsVersion(readmeContent, currentVersion);
-        if (readmeWasUpdated) {
-            fs.writeFileSync(readmePath, updatedReadme);
-            coreExports.info(`Updated ${readmePath} with new Jellyfin version.`);
+        const payload = {
+            event_type: 'update-manifest-node',
+            client_payload
+        };
+        let apiUrl;
+        if (repository?.includes('test')) {
+            apiUrl = `https://api.github.com/repos/intro-skipper/manifest_test/dispatches`;
         }
         else {
-            coreExports.info(`${readmePath} has already newest Jellyfin version.`);
+            apiUrl = `https://api.github.com/repos/intro-skipper/manifest/dispatches`;
+        }
+        const token = process.env.GITHUB_PAT;
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+                Accept: 'application/vnd.github.v3+json', // Or application/vnd.github+json
+                Authorization: `Bearer ${token}`,
+                'X-GitHub-Api-Version': '2022-11-28',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        if (response.ok) {
+            // response.ok is true if status is 200-299
+            console.log(`Successfully triggered dispatch event 'update-manifest'. Status: ${response.status}`);
+            if (response.status === 204) {
+                console.log('No content returned, which is expected for dispatches.');
+            }
+            else {
+                const responseData = await response.text(); // Or response.json() if expecting JSON
+                console.log('Response data:', responseData);
+            }
+        }
+        else {
+            console.error(`Failed to trigger dispatch event. Status: ${response.status}`);
+            const errorText = await response.text();
+            console.error('Error details:', errorText);
         }
         const bugReportFormContent = fs.readFileSync(bugReportFormPath, 'utf8');
         const { updatedContent: updatedBugReport, wasUpdated: bugReportWasUpdated } = updateDocsVersion(bugReportFormContent, currentVersion);
@@ -27340,10 +27356,6 @@ async function updateManifest() {
         else {
             coreExports.info(`${bugReportFormPath} has already newest Jellyfin version.`);
         }
-        // Clean up old releases
-        jsonData[0] = cleanUpOldReleases([jsonData[0]])[0];
-        // Write the modified JSON data back to the file
-        fs.writeFileSync(manifestPath, JSON.stringify(jsonData, null, 4), 'utf8');
         coreExports.info('All operations completed successfully.');
         process.exit(0);
     }
@@ -27351,73 +27363,13 @@ async function updateManifest() {
         coreExports.setFailed(`Error updating manifest: ${error instanceof Error ? error.message : String(error)}`);
     }
 }
-async function validVersion(v) {
-    coreExports.info(`Validating version ${v.version}...`);
-    const isValidChecksum = await verifyChecksum(v.sourceUrl, v.checksum);
-    if (!isValidChecksum) {
-        coreExports.setFailed(`Checksum mismatch for URL: ${v.sourceUrl}`);
-    }
-    else {
-        coreExports.info(`Version ${v.version} is valid.`);
-    }
-}
-async function verifyChecksum(url, expectedChecksum) {
-    try {
-        const hash = await downloadAndHashFile(url);
-        return hash === expectedChecksum;
-    }
-    catch (error) {
-        coreExports.setFailed(`Error verifying checksum for URL: ${url} ${error}`);
-        return false;
-    }
-}
-async function downloadAndHashFile(url, redirects = 5) {
-    if (redirects === 0) {
-        throw new Error('Too many redirects');
-    }
-    return new Promise((resolve, reject) => {
-        require$$3
-            .get(url, async (response) => {
-            try {
-                if (response.statusCode != null &&
-                    response.statusCode >= 300 &&
-                    response.statusCode < 400 &&
-                    response.headers.location) {
-                    // Follow redirect
-                    const redirectUrl = new URL$1(response.headers.location, url).toString();
-                    const hash = await downloadAndHashFile(redirectUrl, redirects - 1);
-                    resolve(hash);
-                }
-                else if (response.statusCode === 200) {
-                    const hash = crypto.createHash('md5');
-                    response.pipe(hash);
-                    response.on('end', () => {
-                        resolve(hash.digest('hex'));
-                    });
-                    response.on('error', (err) => {
-                        reject(err);
-                    });
-                }
-                else {
-                    reject(new Error(`Failed to get '${url}' (${response.statusCode})`));
-                }
-            }
-            catch (err) {
-                reject(err);
-            }
-        })
-            .on('error', (err) => {
-            reject(err);
-        });
-    });
-}
 function getMD5FromFile(file) {
     if (!fs.existsSync(file)) {
         coreExports.setFailed(`File ${file} not found`);
         return '';
     }
     const fileBuffer = fs.readFileSync(file);
-    return crypto.createHash('md5').update(fileBuffer).digest('hex');
+    return require$$0$1.createHash('md5').update(fileBuffer).digest('hex');
 }
 function updateDocsVersion(content, currentVersion) {
     if (currentVersion == null) {
@@ -27427,35 +27379,6 @@ function updateDocsVersion(content, currentVersion) {
     const updatedContent = content.replace(/Jellyfin.*\(or newer\)/, `Jellyfin ${currentVersion} (or newer)`);
     const wasUpdated = content !== updatedContent;
     return { updatedContent, wasUpdated };
-}
-function cleanUpOldReleases(jsonData) {
-    // Extract all unique targetAbi values
-    const abiSet = new Set();
-    for (const entry of jsonData) {
-        for (const v of entry.versions) {
-            abiSet.add(v.targetAbi);
-        }
-    }
-    // Convert the Set to an array and sort it in descending order
-    const abiArray = Array.from(abiSet).sort((a, b) => {
-        const aParts = a.split('.').map(Number);
-        const bParts = b.split('.').map(Number);
-        for (let i = 0; i < aParts.length; i++) {
-            if (aParts[i] > bParts[i])
-                return -1;
-            if (aParts[i] < bParts[i])
-                return 1;
-        }
-        return 0;
-    });
-    // Identify the highest and second highest targetAbi
-    const highestAbi = abiArray[0];
-    const secondHighestAbi = abiArray[1];
-    // Filter the versions array to keep only those with the highest or second highest targetAbi
-    return jsonData.map((entry) => ({
-        ...entry,
-        versions: entry.versions.filter((v) => v.targetAbi === highestAbi || v.targetAbi === secondHighestAbi)
-    }));
 }
 async function fetchNugetPackageVersions(packageName) {
     const url = `https://api.nuget.org/v3-flatcontainer/${packageName.toLowerCase()}/index.json`;

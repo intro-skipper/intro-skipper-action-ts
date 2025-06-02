@@ -1,46 +1,17 @@
 import * as core from '@actions/core'
 
-import https from 'https'
 import crypto from 'crypto'
 import fs from 'fs'
-import { URL } from 'url'
 
 const repository = process.env.GITHUB_REPOSITORY
 const version = process.env.NEW_FILE_VERSION
-const gitHubRepoVisibilty = process.env.GITHUB_REPO_VISIBILITY
 const isBeta = process.env.IS_BETA
 const mainVersion = process.env.MAIN_VERSION
 let currentVersion: string
 let targetAbi = ''
 
-type Manifest = {
-  guid: string
-  name: string
-  overview: string
-  description: string
-  owner: string
-  category: string
-  imageUrl: string
-  versions: Version[]
-}
-
-type Version = {
-  version: string
-  changelog: string
-  targetAbi: string
-  sourceUrl: string
-  checksum: string
-  timestamp: string
-}
-
 type Nuget = {
   versions: string[]
-}
-
-// Read manifest.json
-const manifestPath = './manifest.json'
-if (!fs.existsSync(manifestPath)) {
-  core.setFailed('manifest.json file not found')
 }
 
 // Read README.md
@@ -56,8 +27,6 @@ if (!fs.existsSync(bugReportFormPath)) {
 }
 
 export async function updateManifest(): Promise<void> {
-  const jsonData: Manifest[] = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
-
   try {
     if (mainVersion && isBeta === 'false') {
       currentVersion = await getNugetPackageVersion(
@@ -72,7 +41,8 @@ export async function updateManifest(): Promise<void> {
       currentVersion = `${mainVersion}.0`
     }
     targetAbi = `${currentVersion}.0`
-    const newVersion = {
+    const client_payload = {
+      pluginName: 'Intro Skipper',
       version: version!,
       changelog: `- See the full changelog at [GitHub](https://github.com/${repository}/releases/tag/${mainVersion}/v${version})\n`,
       targetAbi,
@@ -81,23 +51,49 @@ export async function updateManifest(): Promise<void> {
       timestamp: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
     }
 
-    core.info(`Repo is ${gitHubRepoVisibilty}.`)
-    if (gitHubRepoVisibilty === 'public') {
-      await validVersion(newVersion)
+    const payload = {
+      event_type: 'update-manifest-node',
+      client_payload
     }
 
-    // Add the new version to the manifest
-    jsonData[0].versions.unshift(newVersion)
+    let apiUrl: string
 
-    core.info('Manifest updated successfully.')
-    const readmeContent = fs.readFileSync(readmePath, 'utf8')
-    const { updatedContent: updatedReadme, wasUpdated: readmeWasUpdated } =
-      updateDocsVersion(readmeContent, currentVersion)
-    if (readmeWasUpdated) {
-      fs.writeFileSync(readmePath, updatedReadme)
-      core.info(`Updated ${readmePath} with new Jellyfin version.`)
+    if (repository?.includes('test')) {
+      apiUrl = `https://api.github.com/repos/intro-skipper/manifest_test/dispatches`
     } else {
-      core.info(`${readmePath} has already newest Jellyfin version.`)
+      apiUrl = `https://api.github.com/repos/intro-skipper/manifest/dispatches`
+    }
+
+    const token = process.env.GITHUB_PAT
+
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/vnd.github.v3+json', // Or application/vnd.github+json
+        Authorization: `Bearer ${token}`,
+        'X-GitHub-Api-Version': '2022-11-28',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    })
+
+    if (response.ok) {
+      // response.ok is true if status is 200-299
+      console.log(
+        `Successfully triggered dispatch event 'update-manifest'. Status: ${response.status}`
+      )
+      if (response.status === 204) {
+        console.log('No content returned, which is expected for dispatches.')
+      } else {
+        const responseData = await response.text() // Or response.json() if expecting JSON
+        console.log('Response data:', responseData)
+      }
+    } else {
+      console.error(
+        `Failed to trigger dispatch event. Status: ${response.status}`
+      )
+      const errorText = await response.text()
+      console.error('Error details:', errorText)
     }
 
     const bugReportFormContent = fs.readFileSync(bugReportFormPath, 'utf8')
@@ -112,12 +108,6 @@ export async function updateManifest(): Promise<void> {
       core.info(`${bugReportFormPath} has already newest Jellyfin version.`)
     }
 
-    // Clean up old releases
-    jsonData[0] = cleanUpOldReleases([jsonData[0]])[0]
-
-    // Write the modified JSON data back to the file
-    fs.writeFileSync(manifestPath, JSON.stringify(jsonData, null, 4), 'utf8')
-
     core.info('All operations completed successfully.')
     process.exit(0)
   } catch (error) {
@@ -125,77 +115,6 @@ export async function updateManifest(): Promise<void> {
       `Error updating manifest: ${error instanceof Error ? error.message : String(error)}`
     )
   }
-}
-
-async function validVersion(v: Version): Promise<void> {
-  core.info(`Validating version ${v.version}...`)
-
-  const isValidChecksum = await verifyChecksum(v.sourceUrl, v.checksum)
-  if (!isValidChecksum) {
-    core.setFailed(`Checksum mismatch for URL: ${v.sourceUrl}`)
-  } else {
-    core.info(`Version ${v.version} is valid.`)
-  }
-}
-
-async function verifyChecksum(
-  url: string,
-  expectedChecksum: string
-): Promise<boolean> {
-  try {
-    const hash = await downloadAndHashFile(url)
-    return hash === expectedChecksum
-  } catch (error) {
-    core.setFailed(`Error verifying checksum for URL: ${url} ${error}`)
-    return false
-  }
-}
-
-async function downloadAndHashFile(
-  url: string,
-  redirects = 5
-): Promise<string> {
-  if (redirects === 0) {
-    throw new Error('Too many redirects')
-  }
-
-  return new Promise((resolve, reject) => {
-    https
-      .get(url, async (response) => {
-        try {
-          if (
-            response.statusCode != null &&
-            response.statusCode >= 300 &&
-            response.statusCode < 400 &&
-            response.headers.location
-          ) {
-            // Follow redirect
-            const redirectUrl = new URL(
-              response.headers.location,
-              url
-            ).toString()
-            const hash = await downloadAndHashFile(redirectUrl, redirects - 1)
-            resolve(hash)
-          } else if (response.statusCode === 200) {
-            const hash = crypto.createHash('md5')
-            response.pipe(hash)
-            response.on('end', () => {
-              resolve(hash.digest('hex'))
-            })
-            response.on('error', (err) => {
-              reject(err)
-            })
-          } else {
-            reject(new Error(`Failed to get '${url}' (${response.statusCode})`))
-          }
-        } catch (err) {
-          reject(err)
-        }
-      })
-      .on('error', (err) => {
-        reject(err)
-      })
-  })
 }
 
 function getMD5FromFile(file: string): string {
@@ -221,40 +140,6 @@ export function updateDocsVersion(
   )
   const wasUpdated = content !== updatedContent
   return { updatedContent, wasUpdated }
-}
-
-export function cleanUpOldReleases(jsonData: Manifest[]): Manifest[] {
-  // Extract all unique targetAbi values
-  const abiSet = new Set()
-  for (const entry of jsonData) {
-    for (const v of entry.versions) {
-      abiSet.add(v.targetAbi)
-    }
-  }
-
-  // Convert the Set to an array and sort it in descending order
-  const abiArray = Array.from(abiSet).sort((a, b) => {
-    const aParts = (a as string).split('.').map(Number)
-    const bParts = (b as string).split('.').map(Number)
-
-    for (let i = 0; i < aParts.length; i++) {
-      if (aParts[i] > bParts[i]) return -1
-      if (aParts[i] < bParts[i]) return 1
-    }
-    return 0
-  })
-
-  // Identify the highest and second highest targetAbi
-  const highestAbi = abiArray[0]
-  const secondHighestAbi = abiArray[1]
-
-  // Filter the versions array to keep only those with the highest or second highest targetAbi
-  return jsonData.map((entry) => ({
-    ...entry,
-    versions: entry.versions.filter(
-      (v) => v.targetAbi === highestAbi || v.targetAbi === secondHighestAbi
-    )
-  }))
 }
 
 async function fetchNugetPackageVersions(
