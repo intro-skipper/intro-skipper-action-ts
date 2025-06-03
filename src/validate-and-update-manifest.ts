@@ -2,6 +2,7 @@ import * as core from '@actions/core'
 
 import crypto from 'crypto'
 import fs from 'fs'
+import { findBuildYaml, loadJPRMBuildFile } from './jprm.js'
 
 const repository = process.env.GITHUB_REPOSITORY
 const version = process.env.NEW_FILE_VERSION
@@ -16,117 +17,185 @@ type Nuget = {
   versions: string[]
 }
 
-// Read README.md
-const readmePath = './README.md'
-if (!fs.existsSync(readmePath)) {
-  core.setFailed('README.md file not found')
-}
-
-// Read .github/ISSUE_TEMPLATE/bug_report_form.yml
-const bugReportFormPath = './.github/ISSUE_TEMPLATE/bug_report_form.yml'
-if (!fs.existsSync(bugReportFormPath)) {
-  core.setFailed(`${bugReportFormPath} file not found`)
-}
-
 export async function updateManifest(): Promise<void> {
   if (!token) {
     core.setFailed('GITHUB_PAT environment variable is not set')
   }
-  try {
-    if (mainVersion && isBeta === 'false') {
-      currentVersion = await getNugetPackageVersion(
-        'Jellyfin.Model',
-        mainVersion + '.*-*'
-      )
-      if (currentVersion == null) {
-        core.setFailed('Failed to get current version of Jellyfin.Model')
-        return
-      }
-    } else {
-      currentVersion = `${mainVersion}.0`
-    }
-    targetAbi = `${currentVersion}.0`
-    const client_payload = {
-      pluginName: 'Intro Skipper',
-      version: version!,
-      changelog: `- See the full changelog at [GitHub](https://github.com/${repository}/releases/tag/${mainVersion}/v${version})\n`,
-      targetAbi,
-      sourceUrl: `https://github.com/${repository}/releases/download/${mainVersion}/v${version}/intro-skipper-v${version}.zip`,
-      checksum: getMD5FromFile(`intro-skipper-v${version}.zip`),
-      timestamp: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
+
+  const buildYamlPath = await findBuildYaml()
+
+  // intro-skipper
+  if (!buildYamlPath || !fs.existsSync(buildYamlPath)) {
+    // Read README.md
+    const readmePath = './README.md'
+    if (!fs.existsSync(readmePath)) {
+      core.setFailed('README.md file not found')
     }
 
-    const payload = {
-      event_type: 'update-manifest-node',
-      client_payload
+    // Read .github/ISSUE_TEMPLATE/bug_report_form.yml
+    const bugReportFormPath = './.github/ISSUE_TEMPLATE/bug_report_form.yml'
+    if (!fs.existsSync(bugReportFormPath)) {
+      core.setFailed(`${bugReportFormPath} file not found`)
     }
 
-    let apiUrl: string
-
-    if (repository?.includes('test')) {
-      apiUrl = `https://api.github.com/repos/intro-skipper/manifest_test/dispatches`
-    } else {
-      apiUrl = `https://api.github.com/repos/intro-skipper/manifest/dispatches`
-    }
-
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        Accept: 'application/vnd.github.v3+json', // Or application/vnd.github+json
-        Authorization: `Bearer ${token}`,
-        'X-GitHub-Api-Version': '2022-11-28',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    })
-
-    if (response.ok) {
-      // response.ok is true if status is 200-299
-      console.log(
-        `Successfully triggered dispatch event 'update-manifest'. Status: ${response.status}`
-      )
-      if (response.status === 204) {
-        console.log('No content returned, which is expected for dispatches.')
+    try {
+      if (mainVersion && isBeta === 'false') {
+        currentVersion = await getNugetPackageVersion(
+          'Jellyfin.Model',
+          mainVersion + '.*-*'
+        )
+        if (currentVersion == null) {
+          core.setFailed('Failed to get current version of Jellyfin.Model')
+          return
+        }
       } else {
-        const responseData = await response.text() // Or response.json() if expecting JSON
-        console.log('Response data:', responseData)
+        currentVersion = `${mainVersion}.0`
       }
-    } else {
-      console.error(
-        `Failed to trigger dispatch event. Status: ${response.status}`
+      targetAbi = `${currentVersion}.0`
+      const client_payload = {
+        pluginName: 'Intro Skipper',
+        version: version!,
+        changelog: `- See the full changelog at [GitHub](https://github.com/${repository}/releases/tag/${mainVersion}/v${version})\n`,
+        targetAbi,
+        sourceUrl: `https://github.com/${repository}/releases/download/${mainVersion}/v${version}/intro-skipper-v${version}.zip`,
+        checksum: getMD5FromFile(`intro-skipper-v${version}.zip`),
+        timestamp: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
+      }
+
+      const payload = {
+        event_type: 'update-manifest-node',
+        client_payload
+      }
+
+      let apiUrl: string
+
+      if (repository?.includes('test')) {
+        apiUrl = `https://api.github.com/repos/intro-skipper/manifest_test/dispatches`
+      } else {
+        apiUrl = `https://api.github.com/repos/intro-skipper/manifest/dispatches`
+      }
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/vnd.github.v3+json', // Or application/vnd.github+json
+          Authorization: `Bearer ${token}`,
+          'X-GitHub-Api-Version': '2022-11-28',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      })
+
+      if (response.ok) {
+        // response.ok is true if status is 200-299
+        console.log(
+          `Successfully triggered dispatch event 'update-manifest'. Status: ${response.status}`
+        )
+        if (response.status === 204) {
+          console.log('No content returned, which is expected for dispatches.')
+        } else {
+          const responseData = await response.text() // Or response.json() if expecting JSON
+          console.log('Response data:', responseData)
+        }
+      } else {
+        console.error(
+          `Failed to trigger dispatch event. Status: ${response.status}`
+        )
+        const errorText = await response.text()
+        console.error('Error details:', errorText)
+      }
+
+      const readmeContent = fs.readFileSync(readmePath, 'utf8')
+      const { updatedContent: updatedReadme, wasUpdated: readmeWasUpdated } =
+        updateDocsVersion(readmeContent, currentVersion)
+      if (readmeWasUpdated) {
+        fs.writeFileSync(readmePath, updatedReadme)
+        core.info(`Updated ${readmePath} with new Jellyfin version.`)
+      } else {
+        core.info(`${readmePath} has already newest Jellyfin version.`)
+      }
+
+      const bugReportFormContent = fs.readFileSync(bugReportFormPath, 'utf8')
+      const {
+        updatedContent: updatedBugReport,
+        wasUpdated: bugReportWasUpdated
+      } = updateDocsVersion(bugReportFormContent, currentVersion)
+      if (bugReportWasUpdated) {
+        fs.writeFileSync(bugReportFormPath, updatedBugReport)
+        core.info(`Updated ${bugReportFormPath} with new Jellyfin version.`)
+      } else {
+        core.info(`${bugReportFormPath} has already newest Jellyfin version.`)
+      }
+
+      core.info('All operations completed successfully.')
+      process.exit(0)
+    } catch (error) {
+      core.setFailed(
+        `Error updating manifest: ${error instanceof Error ? error.message : String(error)}`
       )
-      const errorText = await response.text()
-      console.error('Error details:', errorText)
     }
+  } else {
+    const yaml = await loadJPRMBuildFile(buildYamlPath)
+    try {
+      const client_payload = {
+        pluginName: yaml?.name,
+        version: yaml?.version,
+        changelog: `- See the full changelog at [GitHub](https://github.com/${repository}/releases/tag/${mainVersion}/v${version})\n`,
+        targetAbi: yaml?.targetAbi,
+        sourceUrl: `https://github.com/${repository}/releases/download/${mainVersion}/v${yaml?.version}/intro-skipper-v${yaml?.version}.zip`,
+        checksum: getMD5FromFile(`intro-skipper-v${version}.zip`),
+        timestamp: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
+      }
 
-    const readmeContent = fs.readFileSync(readmePath, 'utf8')
-    const { updatedContent: updatedReadme, wasUpdated: readmeWasUpdated } =
-      updateDocsVersion(readmeContent, currentVersion)
-    if (readmeWasUpdated) {
-      fs.writeFileSync(readmePath, updatedReadme)
-      core.info(`Updated ${readmePath} with new Jellyfin version.`)
-    } else {
-      core.info(`${readmePath} has already newest Jellyfin version.`)
+      const payload = {
+        event_type: 'update-manifest-node',
+        client_payload
+      }
+
+      let apiUrl: string
+
+      if (repository?.includes('test')) {
+        apiUrl = `https://api.github.com/repos/intro-skipper/manifest_test/dispatches`
+      } else {
+        apiUrl = `https://api.github.com/repos/intro-skipper/manifest/dispatches`
+      }
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/vnd.github.v3+json', // Or application/vnd.github+json
+          Authorization: `Bearer ${token}`,
+          'X-GitHub-Api-Version': '2022-11-28',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      })
+
+      if (response.ok) {
+        // response.ok is true if status is 200-299
+        console.log(
+          `Successfully triggered dispatch event 'update-manifest'. Status: ${response.status}`
+        )
+        if (response.status === 204) {
+          console.log('No content returned, which is expected for dispatches.')
+        } else {
+          const responseData = await response.text() // Or response.json() if expecting JSON
+          console.log('Response data:', responseData)
+        }
+      } else {
+        console.error(
+          `Failed to trigger dispatch event. Status: ${response.status}`
+        )
+        const errorText = await response.text()
+        console.error('Error details:', errorText)
+      }
+      core.info('All operations completed successfully.')
+      process.exit(0)
+    } catch (error) {
+      core.setFailed(
+        `Error updating manifest: ${error instanceof Error ? error.message : String(error)}`
+      )
     }
-
-    const bugReportFormContent = fs.readFileSync(bugReportFormPath, 'utf8')
-    const {
-      updatedContent: updatedBugReport,
-      wasUpdated: bugReportWasUpdated
-    } = updateDocsVersion(bugReportFormContent, currentVersion)
-    if (bugReportWasUpdated) {
-      fs.writeFileSync(bugReportFormPath, updatedBugReport)
-      core.info(`Updated ${bugReportFormPath} with new Jellyfin version.`)
-    } else {
-      core.info(`${bugReportFormPath} has already newest Jellyfin version.`)
-    }
-
-    core.info('All operations completed successfully.')
-    process.exit(0)
-  } catch (error) {
-    core.setFailed(
-      `Error updating manifest: ${error instanceof Error ? error.message : String(error)}`
-    )
   }
 }
 
