@@ -9,6 +9,11 @@ const isBeta = process.env.IS_BETA
 const mainVersion = process.env.MAIN_VERSION
 const token = process.env.GITHUB_PAT
 
+if (token) {
+  // Ensure the token is masked in any log output produced by the Actions runtime.
+  core.setSecret(token)
+}
+
 let currentVersion: string
 let targetAbi = ''
 

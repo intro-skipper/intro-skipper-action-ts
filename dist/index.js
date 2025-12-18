@@ -27517,6 +27517,10 @@ const version = process.env.NEW_FILE_VERSION;
 const isBeta = process.env.IS_BETA;
 const mainVersion = process.env.MAIN_VERSION;
 const token = process.env.GITHUB_PAT;
+if (token) {
+    // Ensure the token is masked in any log output produced by the Actions runtime.
+    coreExports.setSecret(token);
+}
 let currentVersion;
 let targetAbi = '';
 // Read README.md
