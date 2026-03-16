@@ -5,7 +5,7 @@ author: intro-skipper
 # Define your inputs here.
 inputs:
   task-type:
-    description: 'The type of task to perform'
+    description: 'The type of task to perform (updateManifest | updateVersion | addSpdxHeaders)'
     required: true
 
 runs:
