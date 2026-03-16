@@ -14,10 +14,10 @@ const botsToSkip = new Set([
 const botPattern = /\[bot\]$/
 
 const authorsToMerge: Record<string, string> = {
-  'rlauu': 'rlauuzo',
+  rlauu: 'rlauuzo',
   'Abandoned Cart': 'AbandonedCart',
-  'TwistedUmbrellaX': 'AbandonedCart',
-  'jumoog': 'Kilian von Pflugk'
+  TwistedUmbrellaX: 'AbandonedCart',
+  jumoog: 'Kilian von Pflugk'
 }
 
 interface YearRange {
@@ -143,7 +143,7 @@ async function processFile(filePath: string, rootDir: string): Promise<void> {
     newLines.push(line)
   }
 
-  const headerLines = sortedAuthors.map(author => {
+  const headerLines = sortedAuthors.map((author) => {
     const years = authorYears.get(author)!
     const yearStr =
       years.firstYear === years.lastYear
@@ -165,6 +165,6 @@ async function processFile(filePath: string, rootDir: string): Promise<void> {
 
 export async function addSpdxHeaders(rootDir = '.'): Promise<void> {
   const csFiles = [...walkCsFiles(rootDir)]
-  await Promise.all(csFiles.map(filePath => processFile(filePath, rootDir)))
+  await Promise.all(csFiles.map((filePath) => processFile(filePath, rootDir)))
   core.info('Done!')
 }
