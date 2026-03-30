@@ -53,6 +53,6 @@
     "typescript": "^6.0.2"
   },
   "optionalDependencies": {
-    "@rollup/rollup-linux-x64-gnu": "4.60.0"
+    "@rollup/rollup-linux-x64-gnu": "4.60.1"
   }
 }
