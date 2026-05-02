@@ -30561,7 +30561,8 @@ const execAsync = promisify(exec$1);
 const botsToSkip = new Set([
     'Copilot',
     'SourceryAI',
-    'Copilot Autofix powered by AI'
+    'Copilot Autofix powered by AI',
+    'Claude Opus 4.7'
 ]);
 const botPattern = /\[bot\]$/;
 const authorsToMerge = {
