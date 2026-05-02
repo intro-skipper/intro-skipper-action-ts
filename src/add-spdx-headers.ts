@@ -9,7 +9,8 @@ const execAsync = promisify(exec)
 const botsToSkip = new Set([
   'Copilot',
   'SourceryAI',
-  'Copilot Autofix powered by AI'
+  'Copilot Autofix powered by AI',
+  'Claude Opus 4.7'
 ])
 const botPattern = /\[bot\]$/
 
