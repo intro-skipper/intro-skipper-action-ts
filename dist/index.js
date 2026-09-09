@@ -30881,9 +30881,9 @@ const botsToSkip = new Set([
     'Copilot',
     'SourceryAI',
     'Copilot Autofix powered by AI',
-    'Claude Opus 4.7'
+    'Capy Agent'
 ]);
-const botPattern = /\[bot\]$/;
+const botPattern = /^Claude (Opus|Sonnet|Haiku|Fable) |\[bot\]$/;
 const authorsToMerge = {
     rlauu: 'rlauuzo',
     'Abandoned Cart': 'AbandonedCart',
