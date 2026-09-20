@@ -14,46 +14,53 @@ if (token) {
   core.setSecret(token)
 }
 
-let currentVersion: string
-let targetAbi = ''
-
 type Nuget = {
   versions: string[]
 }
 
-// Read README.md
 const readmePath = './README.md'
-if (!fs.existsSync(readmePath)) {
-  core.setFailed('README.md file not found')
-}
-
-// Read .github/ISSUE_TEMPLATE/bug_report_form.yml
 const bugReportFormPath = './.github/ISSUE_TEMPLATE/bug_report_form.yml'
-if (!fs.existsSync(bugReportFormPath)) {
-  core.setFailed(`${bugReportFormPath} file not found`)
-}
 
 export async function updateManifest(): Promise<void> {
   if (!token) {
     core.setFailed('GITHUB_PAT environment variable is not set')
+    return
   }
+  if (!mainVersion) {
+    core.setFailed('MAIN_VERSION environment variable is not set')
+    return
+  }
+  if (!version) {
+    core.setFailed('NEW_FILE_VERSION environment variable is not set')
+    return
+  }
+  if (!repository) {
+    core.setFailed('GITHUB_REPOSITORY environment variable is not set')
+    return
+  }
+  if (!fs.existsSync(readmePath)) {
+    core.setFailed(`${readmePath} file not found`)
+    return
+  }
+  if (!fs.existsSync(bugReportFormPath)) {
+    core.setFailed(`${bugReportFormPath} file not found`)
+    return
+  }
+
   try {
-    if (mainVersion && isBeta === 'false') {
+    let currentVersion: string
+    if (isBeta === 'false') {
       currentVersion = await getNugetPackageVersion(
         'Jellyfin.Model',
-        mainVersion + '.*-*'
+        `${mainVersion}.*`
       )
-      if (currentVersion == null) {
-        core.setFailed('Failed to get current version of Jellyfin.Model')
-        return
-      }
     } else {
       currentVersion = `${mainVersion}.0`
     }
-    targetAbi = `${currentVersion}.0`
+    const targetAbi = `${currentVersion}.0`
     const client_payload = {
       pluginName: 'Intro Skipper',
-      version: version!,
+      version,
       changelog: `- See the full changelog at [GitHub](https://github.com/${repository}/releases/tag/${mainVersion}/v${version})\n`,
       targetAbi,
       sourceUrl: `https://github.com/${repository}/releases/download/${mainVersion}/v${version}/intro-skipper-v${version}.zip`,
@@ -68,7 +75,7 @@ export async function updateManifest(): Promise<void> {
 
     let apiUrl: string
 
-    if (repository?.includes('test')) {
+    if (repository.includes('test')) {
       apiUrl = `https://api.github.com/repos/intro-skipper/manifest_test/dispatches`
     } else {
       apiUrl = `https://api.github.com/repos/intro-skipper/manifest/dispatches`
@@ -85,23 +92,22 @@ export async function updateManifest(): Promise<void> {
       body: JSON.stringify(payload)
     })
 
-    if (response.ok) {
-      // response.ok is true if status is 200-299
-      console.log(
-        `Successfully triggered dispatch event 'update-manifest'. Status: ${response.status}`
-      )
-      if (response.status === 204) {
-        console.log('No content returned, which is expected for dispatches.')
-      } else {
-        const responseData = await response.text() // Or response.json() if expecting JSON
-        console.log('Response data:', responseData)
-      }
-    } else {
-      console.error(
-        `Failed to trigger dispatch event. Status: ${response.status}`
-      )
+    if (!response.ok) {
       const errorText = await response.text()
-      console.error('Error details:', errorText)
+      throw new Error(
+        `Failed to trigger dispatch event. Status: ${response.status}. Details: ${errorText}`
+      )
+    }
+
+    // response.ok is true if status is 200-299
+    core.info(
+      `Successfully triggered dispatch event 'update-manifest'. Status: ${response.status}`
+    )
+    if (response.status === 204) {
+      core.info('No content returned, which is expected for dispatches.')
+    } else {
+      const responseData = await response.text() // Or response.json() if expecting JSON
+      core.info(`Response data: ${responseData}`)
     }
 
     const readmeContent = fs.readFileSync(readmePath, 'utf8')
@@ -127,7 +133,6 @@ export async function updateManifest(): Promise<void> {
     }
 
     core.info('All operations completed successfully.')
-    process.exit(0)
   } catch (error) {
     core.setFailed(
       `Error updating manifest: ${error instanceof Error ? error.message : String(error)}`
@@ -137,8 +142,7 @@ export async function updateManifest(): Promise<void> {
 
 function getMD5FromFile(file: string): string {
   if (!fs.existsSync(file)) {
-    core.setFailed(`File ${file} not found`)
-    return ''
+    throw new Error(`File ${file} not found`)
   }
   const fileBuffer = fs.readFileSync(file)
   return crypto.createHash('md5').update(fileBuffer).digest('hex')
@@ -146,12 +150,8 @@ function getMD5FromFile(file: string): string {
 
 export function updateDocsVersion(
   content: string,
-  currentVersion?: string
+  currentVersion: string
 ): { updatedContent: string; wasUpdated: boolean } {
-  if (currentVersion == null) {
-    core.setFailed('Failed to get current version of Jellyfin.Model')
-    return { updatedContent: content, wasUpdated: false }
-  }
   const updatedContent = content.replace(
     /Jellyfin.*\(or newer\)/,
     `Jellyfin ${currentVersion} (or newer)`
@@ -180,25 +180,32 @@ async function fetchNugetPackageVersions(
     throw new Error(
       `Error fetching package information for ${packageName}: ${
         error instanceof Error ? error.message : String(error)
-      }`
+      }`,
+      { cause: error }
     )
   }
 }
 
+/**
+ * Returns the latest stable version matching `versionPattern`, where `*`
+ * acts as a wildcard (e.g. `10.11.*`). Pre-release versions (containing a
+ * `-`) are ignored. Relies on NuGet returning versions in ascending order.
+ */
 export function filterVersions(
   versions: string[],
   versionPattern: string
 ): string | undefined {
-  const versionRegex = new RegExp(
-    versionPattern.replace(/\./g, '\\.').replace('*', '.*')
+  const escaped = versionPattern
+    .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+    .replace(/\*/g, '.*')
+  const versionRegex = new RegExp(`^${escaped}$`)
+  const matchingVersions = versions.filter(
+    (v) => !v.includes('-') && versionRegex.test(v)
   )
-  const matchingVersions = versions.filter((v) => versionRegex.test(v))
 
   if (matchingVersions.length > 0) {
-    const latestVersion = matchingVersions[matchingVersions.length - 1]
-    return latestVersion
+    return matchingVersions[matchingVersions.length - 1]
   }
-  core.setFailed(`No versions match the pattern ${versionPattern}`)
   return undefined
 }
 
@@ -206,23 +213,16 @@ async function getNugetPackageVersion(
   packageName: string,
   versionPattern: string
 ): Promise<string> {
-  try {
-    const versions = await fetchNugetPackageVersions(packageName)
-    const latestVersion = filterVersions(versions, versionPattern)
+  const versions = await fetchNugetPackageVersions(packageName)
+  const latestVersion = filterVersions(versions, versionPattern)
 
-    if (latestVersion) {
-      core.info(
-        `Latest version of ${packageName} matching ${versionPattern}: ${latestVersion}`
-      )
-      return latestVersion
-    } else {
-      core.setFailed(
-        `No versions of ${packageName} match the pattern ${versionPattern}`
-      )
-    }
-  } catch (error) {
-    core.setFailed(String(error))
+  if (!latestVersion) {
+    throw new Error(
+      `No versions of ${packageName} match the pattern ${versionPattern}`
+    )
   }
-  core.setFailed(`Something went wrong while fetching ${packageName}`)
-  return ''
+  core.info(
+    `Latest version of ${packageName} matching ${versionPattern}: ${latestVersion}`
+  )
+  return latestVersion
 }
