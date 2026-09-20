@@ -24,6 +24,13 @@ export async function updateVersion(
     const { updatedData, newAssemblyVersion, newFileVersion } =
       updateVersionsInData(data)
 
+    if (!newAssemblyVersion || !newFileVersion) {
+      logger.setFailed(
+        `${csprojPath} must contain both <AssemblyVersion> and <FileVersion> tags`
+      )
+      return
+    }
+
     await fileSystem.promises.writeFile(csprojPath, updatedData, 'utf8')
     logger.info('Version incremented successfully!')
 

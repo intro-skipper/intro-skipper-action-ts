@@ -10,9 +10,9 @@ import { addSpdxHeaders } from './add-spdx-headers.js'
 const taskType = core.getInput('task-type')
 
 if (taskType === 'updateManifest') {
-  updateManifest()
+  await updateManifest()
 } else if (taskType === 'updateVersion') {
-  updateVersion()
+  await updateVersion()
 } else if (taskType === 'addSpdxHeaders') {
   await addSpdxHeaders()
 } else {

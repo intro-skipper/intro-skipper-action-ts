@@ -1,10 +1,15 @@
 import * as core from '@actions/core'
-import { exec } from 'child_process'
+import { execFile } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 import { promisify } from 'util'
 
-const execAsync = promisify(exec)
+const execFileAsync = promisify(execFile)
+
+// Upper bound on concurrently running `git log` processes.
+const MAX_CONCURRENCY = 8
+// `git log` output with full commit bodies can exceed the 1 MiB default.
+const GIT_MAX_BUFFER = 64 * 1024 * 1024
 
 const botsToSkip = new Set([
   'Copilot',
@@ -70,13 +75,23 @@ async function processFile(filePath: string, rootDir: string): Promise<void> {
 
   let gitOutput: string
   try {
-    const result = await execAsync(
-      `git log --follow --format="%an|%ad|%B" --date=short -- "${relativePath}"`,
-      { encoding: 'utf8', cwd: rootDir }
+    const result = await execFileAsync(
+      'git',
+      [
+        'log',
+        '--follow',
+        '--format=%an|%ad|%B',
+        '--date=short',
+        '--',
+        relativePath
+      ],
+      { encoding: 'utf8', cwd: rootDir, maxBuffer: GIT_MAX_BUFFER }
     )
     gitOutput = result.stdout
-  } catch {
-    core.warning(`Failed to get git log for ${relativePath}`)
+  } catch (error) {
+    core.warning(
+      `Failed to get git log for ${relativePath}: ${error instanceof Error ? error.message : String(error)}`
+    )
     return
   }
 
@@ -93,7 +108,7 @@ async function processFile(filePath: string, rootDir: string): Promise<void> {
     if (!currentAuthor) return
     const fullMessage = messageBuffer.join('\n')
     for (const coMatch of fullMessage.matchAll(
-      /Co-authored-by:\s*([^<]+)<[^>]+>/g
+      /Co-authored-by:\s*([^<]+)<[^>]+>/gi
     )) {
       processAuthor(authorYears, coMatch[1].trim(), currentDate)
     }
@@ -166,6 +181,15 @@ async function processFile(filePath: string, rootDir: string): Promise<void> {
 
 export async function addSpdxHeaders(rootDir = '.'): Promise<void> {
   const csFiles = [...walkCsFiles(rootDir)]
-  await Promise.all(csFiles.map((filePath) => processFile(filePath, rootDir)))
+  let next = 0
+  const worker = async (): Promise<void> => {
+    while (next < csFiles.length) {
+      const filePath = csFiles[next++]
+      await processFile(filePath, rootDir)
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(MAX_CONCURRENCY, csFiles.length) }, worker)
+  )
   core.info('Done!')
 }
