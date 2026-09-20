@@ -36,7 +36,7 @@ import require$$1$4 from 'node:console';
 import require$$1$5 from 'node:dns';
 import require$$5$3, { StringDecoder } from 'string_decoder';
 import * as child from 'child_process';
-import { exec as exec$1 } from 'child_process';
+import { execFile } from 'child_process';
 import { setTimeout as setTimeout$1 } from 'timers';
 
 // We use any as a valid input type
@@ -30679,37 +30679,45 @@ if (token) {
     // Ensure the token is masked in any log output produced by the Actions runtime.
     setSecret(token);
 }
-let currentVersion;
-let targetAbi = '';
-// Read README.md
 const readmePath = './README.md';
-if (!fs__default.existsSync(readmePath)) {
-    setFailed('README.md file not found');
-}
-// Read .github/ISSUE_TEMPLATE/bug_report_form.yml
 const bugReportFormPath = './.github/ISSUE_TEMPLATE/bug_report_form.yml';
-if (!fs__default.existsSync(bugReportFormPath)) {
-    setFailed(`${bugReportFormPath} file not found`);
-}
 async function updateManifest() {
     if (!token) {
         setFailed('GITHUB_PAT environment variable is not set');
+        return;
+    }
+    if (!mainVersion) {
+        setFailed('MAIN_VERSION environment variable is not set');
+        return;
+    }
+    if (!version) {
+        setFailed('NEW_FILE_VERSION environment variable is not set');
+        return;
+    }
+    if (!repository) {
+        setFailed('GITHUB_REPOSITORY environment variable is not set');
+        return;
+    }
+    if (!fs__default.existsSync(readmePath)) {
+        setFailed(`${readmePath} file not found`);
+        return;
+    }
+    if (!fs__default.existsSync(bugReportFormPath)) {
+        setFailed(`${bugReportFormPath} file not found`);
+        return;
     }
     try {
-        if (mainVersion && isBeta === 'false') {
-            currentVersion = await getNugetPackageVersion('Jellyfin.Model', mainVersion + '.*-*');
-            if (currentVersion == null) {
-                setFailed('Failed to get current version of Jellyfin.Model');
-                return;
-            }
+        let currentVersion;
+        if (isBeta === 'false') {
+            currentVersion = await getNugetPackageVersion('Jellyfin.Model', `${mainVersion}.*`);
         }
         else {
             currentVersion = `${mainVersion}.0`;
         }
-        targetAbi = `${currentVersion}.0`;
+        const targetAbi = `${currentVersion}.0`;
         const client_payload = {
             pluginName: 'Intro Skipper',
-            version: version,
+            version,
             changelog: `- See the full changelog at [GitHub](https://github.com/${repository}/releases/tag/${mainVersion}/v${version})\n`,
             targetAbi,
             sourceUrl: `https://github.com/${repository}/releases/download/${mainVersion}/v${version}/intro-skipper-v${version}.zip`,
@@ -30721,7 +30729,7 @@ async function updateManifest() {
             client_payload
         };
         let apiUrl;
-        if (repository?.includes('test')) {
+        if (repository.includes('test')) {
             apiUrl = `https://api.github.com/repos/intro-skipper/manifest_test/dispatches`;
         }
         else {
@@ -30737,21 +30745,18 @@ async function updateManifest() {
             },
             body: JSON.stringify(payload)
         });
-        if (response.ok) {
-            // response.ok is true if status is 200-299
-            console.log(`Successfully triggered dispatch event 'update-manifest'. Status: ${response.status}`);
-            if (response.status === 204) {
-                console.log('No content returned, which is expected for dispatches.');
-            }
-            else {
-                const responseData = await response.text(); // Or response.json() if expecting JSON
-                console.log('Response data:', responseData);
-            }
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Failed to trigger dispatch event. Status: ${response.status}. Details: ${errorText}`);
+        }
+        // response.ok is true if status is 200-299
+        info(`Successfully triggered dispatch event 'update-manifest'. Status: ${response.status}`);
+        if (response.status === 204) {
+            info('No content returned, which is expected for dispatches.');
         }
         else {
-            console.error(`Failed to trigger dispatch event. Status: ${response.status}`);
-            const errorText = await response.text();
-            console.error('Error details:', errorText);
+            const responseData = await response.text(); // Or response.json() if expecting JSON
+            info(`Response data: ${responseData}`);
         }
         const readmeContent = fs__default.readFileSync(readmePath, 'utf8');
         const { updatedContent: updatedReadme, wasUpdated: readmeWasUpdated } = updateDocsVersion(readmeContent, currentVersion);
@@ -30772,7 +30777,6 @@ async function updateManifest() {
             info(`${bugReportFormPath} has already newest Jellyfin version.`);
         }
         info('All operations completed successfully.');
-        process.exit(0);
     }
     catch (error) {
         setFailed(`Error updating manifest: ${error instanceof Error ? error.message : String(error)}`);
@@ -30780,17 +30784,12 @@ async function updateManifest() {
 }
 function getMD5FromFile(file) {
     if (!fs__default.existsSync(file)) {
-        setFailed(`File ${file} not found`);
-        return '';
+        throw new Error(`File ${file} not found`);
     }
     const fileBuffer = fs__default.readFileSync(file);
     return crypto__default.createHash('md5').update(fileBuffer).digest('hex');
 }
 function updateDocsVersion(content, currentVersion) {
-    if (currentVersion == null) {
-        setFailed('Failed to get current version of Jellyfin.Model');
-        return { updatedContent: content, wasUpdated: false };
-    }
     const updatedContent = content.replace(/Jellyfin.*\(or newer\)/, `Jellyfin ${currentVersion} (or newer)`);
     const wasUpdated = content !== updatedContent;
     return { updatedContent, wasUpdated };
@@ -30806,36 +30805,33 @@ async function fetchNugetPackageVersions(packageName) {
         return data.versions;
     }
     catch (error) {
-        throw new Error(`Error fetching package information for ${packageName}: ${error instanceof Error ? error.message : String(error)}`);
+        throw new Error(`Error fetching package information for ${packageName}: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
     }
 }
+/**
+ * Returns the latest stable version matching `versionPattern`, where `*`
+ * acts as a wildcard (e.g. `10.11.*`). Pre-release versions (containing a
+ * `-`) are ignored. Relies on NuGet returning versions in ascending order.
+ */
 function filterVersions(versions, versionPattern) {
-    const versionRegex = new RegExp(versionPattern.replace(/\./g, '\\.').replace('*', '.*'));
-    const matchingVersions = versions.filter((v) => versionRegex.test(v));
+    const escaped = versionPattern
+        .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+        .replace(/\*/g, '.*');
+    const versionRegex = new RegExp(`^${escaped}$`);
+    const matchingVersions = versions.filter((v) => !v.includes('-') && versionRegex.test(v));
     if (matchingVersions.length > 0) {
-        const latestVersion = matchingVersions[matchingVersions.length - 1];
-        return latestVersion;
+        return matchingVersions[matchingVersions.length - 1];
     }
-    setFailed(`No versions match the pattern ${versionPattern}`);
     return undefined;
 }
 async function getNugetPackageVersion(packageName, versionPattern) {
-    try {
-        const versions = await fetchNugetPackageVersions(packageName);
-        const latestVersion = filterVersions(versions, versionPattern);
-        if (latestVersion) {
-            info(`Latest version of ${packageName} matching ${versionPattern}: ${latestVersion}`);
-            return latestVersion;
-        }
-        else {
-            setFailed(`No versions of ${packageName} match the pattern ${versionPattern}`);
-        }
+    const versions = await fetchNugetPackageVersions(packageName);
+    const latestVersion = filterVersions(versions, versionPattern);
+    if (!latestVersion) {
+        throw new Error(`No versions of ${packageName} match the pattern ${versionPattern}`);
     }
-    catch (error) {
-        setFailed(String(error));
-    }
-    setFailed(`Something went wrong while fetching ${packageName}`);
-    return '';
+    info(`Latest version of ${packageName} matching ${versionPattern}: ${latestVersion}`);
+    return latestVersion;
 }
 
 // Function to increment version string
@@ -30852,6 +30848,10 @@ async function updateVersion(csprojPath = './IntroSkipper/IntroSkipper.csproj', 
     try {
         const data = await fileSystem.promises.readFile(csprojPath, 'utf8');
         const { updatedData, newAssemblyVersion, newFileVersion } = updateVersionsInData(data);
+        if (!newAssemblyVersion || !newFileVersion) {
+            logger.setFailed(`${csprojPath} must contain both <AssemblyVersion> and <FileVersion> tags`);
+            return;
+        }
         await fileSystem.promises.writeFile(csprojPath, updatedData, 'utf8');
         logger.info('Version incremented successfully!');
         logger.exportVariable('NEW_ASSEMBLY_VERSION', newAssemblyVersion);
@@ -30876,7 +30876,11 @@ function updateVersionsInData(data) {
     return { updatedData, newAssemblyVersion, newFileVersion };
 }
 
-const execAsync = promisify(exec$1);
+const execFileAsync = promisify(execFile);
+// Upper bound on concurrently running `git log` processes.
+const MAX_CONCURRENCY = 8;
+// `git log` output with full commit bodies can exceed the 1 MiB default.
+const GIT_MAX_BUFFER = 64 * 1024 * 1024;
 const botsToSkip = new Set([
     'Copilot',
     'SourceryAI',
@@ -30927,11 +30931,18 @@ async function processFile(filePath, rootDir) {
     info(`Processing: ${relativePath}`);
     let gitOutput;
     try {
-        const result = await execAsync(`git log --follow --format="%an|%ad|%B" --date=short -- "${relativePath}"`, { encoding: 'utf8', cwd: rootDir });
+        const result = await execFileAsync('git', [
+            'log',
+            '--follow',
+            '--format=%an|%ad|%B',
+            '--date=short',
+            '--',
+            relativePath
+        ], { encoding: 'utf8', cwd: rootDir, maxBuffer: GIT_MAX_BUFFER });
         gitOutput = result.stdout;
     }
-    catch {
-        warning(`Failed to get git log for ${relativePath}`);
+    catch (error) {
+        warning(`Failed to get git log for ${relativePath}: ${error instanceof Error ? error.message : String(error)}`);
         return;
     }
     const authorYears = new Map();
@@ -30944,7 +30955,7 @@ async function processFile(filePath, rootDir) {
         if (!currentAuthor)
             return;
         const fullMessage = messageBuffer.join('\n');
-        for (const coMatch of fullMessage.matchAll(/Co-authored-by:\s*([^<]+)<[^>]+>/g)) {
+        for (const coMatch of fullMessage.matchAll(/Co-authored-by:\s*([^<]+)<[^>]+>/gi)) {
             processAuthor(authorYears, coMatch[1].trim(), currentDate);
         }
     };
@@ -31007,16 +31018,23 @@ async function processFile(filePath, rootDir) {
 }
 async function addSpdxHeaders(rootDir = '.') {
     const csFiles = [...walkCsFiles(rootDir)];
-    await Promise.all(csFiles.map((filePath) => processFile(filePath, rootDir)));
+    let next = 0;
+    const worker = async () => {
+        while (next < csFiles.length) {
+            const filePath = csFiles[next++];
+            await processFile(filePath, rootDir);
+        }
+    };
+    await Promise.all(Array.from({ length: Math.min(MAX_CONCURRENCY, csFiles.length) }, worker));
     info('Done!');
 }
 
 const taskType = getInput('task-type');
 if (taskType === 'updateManifest') {
-    updateManifest();
+    await updateManifest();
 }
 else if (taskType === 'updateVersion') {
-    updateVersion();
+    await updateVersion();
 }
 else if (taskType === 'addSpdxHeaders') {
     await addSpdxHeaders();
