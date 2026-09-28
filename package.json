@@ -55,6 +55,6 @@
     "vitest": "^5.0.2"
   },
   "optionalDependencies": {
-    "@rollup/rollup-linux-x64-gnu": "4.63.3"
+    "@rollup/rollup-linux-x64-gnu": "4.63.5"
   }
 }
