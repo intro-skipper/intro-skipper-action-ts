@@ -5,7 +5,6 @@ import fs from 'fs'
 
 const repository = process.env.GITHUB_REPOSITORY
 const version = process.env.NEW_FILE_VERSION
-const isBeta = process.env.IS_BETA
 const mainVersion = process.env.MAIN_VERSION
 const token = process.env.GITHUB_PAT
 
@@ -14,11 +13,8 @@ if (token) {
   core.setSecret(token)
 }
 
-type Nuget = {
-  versions: string[]
-}
-
 const readmePath = './README.md'
+const csprojPath = './IntroSkipper/IntroSkipper.csproj'
 const bugReportFormPath = './.github/ISSUE_TEMPLATE/bug_report_form.yml'
 
 export async function updateManifest(): Promise<void> {
@@ -46,17 +42,20 @@ export async function updateManifest(): Promise<void> {
     core.setFailed(`${bugReportFormPath} file not found`)
     return
   }
+  if (!fs.existsSync(csprojPath)) {
+    core.setFailed(`${csprojPath} file not found`)
+    return
+  }
 
   try {
-    let currentVersion: string
-    if (isBeta === 'false') {
-      currentVersion = await getNugetPackageVersion(
-        'Jellyfin.Model',
-        `${mainVersion}.*`
-      )
-    } else {
-      currentVersion = `${mainVersion}.0`
-    }
+    const currentVersion = await resolveVersion(
+      getPackageReferenceVersion(
+        fs.readFileSync(csprojPath, 'utf8'),
+        'Jellyfin.Model'
+      ),
+      'Jellyfin.Model'
+    )
+    core.info(`Plugin is built against Jellyfin.Model ${currentVersion}`)
     const targetAbi = `${currentVersion}.0`
     const client_payload = {
       pluginName: 'Intro Skipper',
@@ -160,6 +159,53 @@ export function updateDocsVersion(
   return { updatedContent, wasUpdated }
 }
 
+/**
+ * Returns the version of the `PackageReference` named `packageName` in the
+ * given csproj content, as written there (e.g. `12.2.0` or `10.11.*-*`).
+ * The version may be an attribute in any order or a `<Version>` child, and
+ * commented-out references are ignored.
+ */
+export function getPackageReferenceVersion(
+  csproj: string,
+  packageName: string
+): string {
+  const escaped = packageName.replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+  const reference = new RegExp(
+    `<PackageReference\\b([^>]*\\bInclude="${escaped}"[^>]*?)(?:/>|>([\\s\\S]*?)</PackageReference>)`
+  ).exec(csproj.replace(/<!--[\s\S]*?-->/g, ''))
+  const version =
+    reference &&
+    (/\bVersion="([^"]+)"/.exec(reference[1]) ??
+      /<Version>\s*([^<\s]+)\s*<\/Version>/.exec(reference[2] ?? ''))
+  if (!version) {
+    throw new Error(`No PackageReference for ${packageName} found in csproj`)
+  }
+  return version[1]
+}
+
+/**
+ * Turns a csproj package version into the Jellyfin version the manifest
+ * targets, without any pre-release suffix (e.g. `12.3.0-rc1` becomes
+ * `12.3.0`). A floating version such as `10.11.*-*` resolves to the latest
+ * stable NuGet release matching it, or to its `.0` release (`10.12.0`) when
+ * none is stable yet.
+ */
+export async function resolveVersion(
+  reference: string,
+  packageName: string
+): Promise<string> {
+  const [base] = reference.split('-')
+  if (!base.includes('*')) {
+    return base
+  }
+  const versions = await fetchNugetPackageVersions(packageName)
+  return filterVersions(versions, base) ?? base.replace(/\*/g, '0')
+}
+
+type Nuget = {
+  versions: string[]
+}
+
 async function fetchNugetPackageVersions(
   packageName: string
 ): Promise<string[]> {
@@ -207,22 +253,4 @@ export function filterVersions(
     return matchingVersions[matchingVersions.length - 1]
   }
   return undefined
-}
-
-async function getNugetPackageVersion(
-  packageName: string,
-  versionPattern: string
-): Promise<string> {
-  const versions = await fetchNugetPackageVersions(packageName)
-  const latestVersion = filterVersions(versions, versionPattern)
-
-  if (!latestVersion) {
-    throw new Error(
-      `No versions of ${packageName} match the pattern ${versionPattern}`
-    )
-  }
-  core.info(
-    `Latest version of ${packageName} matching ${versionPattern}: ${latestVersion}`
-  )
-  return latestVersion
 }

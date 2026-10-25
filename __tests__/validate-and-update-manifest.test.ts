@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   filterVersions,
+  getPackageReferenceVersion,
+  resolveVersion,
   updateDocsVersion
 } from '../src/validate-and-update-manifest.js'
 
@@ -16,6 +18,73 @@ const core = vi.hoisted(() => ({
 }))
 
 vi.mock('@actions/core', () => core)
+
+describe('getPackageReferenceVersion', () => {
+  const csproj = `<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Jellyfin.Controller" Version="12.1.0" />
+    <PackageReference Include="Jellyfin.Model" Version="12.2.0" />
+  </ItemGroup>
+</Project>`
+
+  it('returns the referenced version of the package', () => {
+    expect(getPackageReferenceVersion(csproj, 'Jellyfin.Model')).toBe('12.2.0')
+  })
+
+  it('returns a floating version as written', () => {
+    const floating = csproj.replace('12.2.0', '10.11.*-*')
+
+    expect(getPackageReferenceVersion(floating, 'Jellyfin.Model')).toBe(
+      '10.11.*-*'
+    )
+  })
+
+  it('accepts attributes in any order', () => {
+    const reordered = csproj.replace(
+      'Include="Jellyfin.Model" Version="12.2.0"',
+      'Version="12.2.0" PrivateAssets="all" Include="Jellyfin.Model"'
+    )
+
+    expect(getPackageReferenceVersion(reordered, 'Jellyfin.Model')).toBe(
+      '12.2.0'
+    )
+  })
+
+  it('reads a <Version> child element', () => {
+    const child = csproj.replace(
+      '<PackageReference Include="Jellyfin.Model" Version="12.2.0" />',
+      '<PackageReference Include="Jellyfin.Model">\n      <Version>12.2.0</Version>\n    </PackageReference>'
+    )
+
+    expect(getPackageReferenceVersion(child, 'Jellyfin.Model')).toBe('12.2.0')
+  })
+
+  it('ignores commented-out references', () => {
+    const commented = csproj.replace(
+      '<ItemGroup>',
+      '<ItemGroup>\n    <!-- <PackageReference Include="Jellyfin.Model" Version="10.9.0" /> -->'
+    )
+
+    expect(getPackageReferenceVersion(commented, 'Jellyfin.Model')).toBe(
+      '12.2.0'
+    )
+  })
+
+  it('treats dots in the package name literally', () => {
+    expect(() =>
+      getPackageReferenceVersion(
+        csproj.replace('Jellyfin.Model', 'JellyfinxModel'),
+        'Jellyfin.Model'
+      )
+    ).toThrow('No PackageReference for Jellyfin.Model found in csproj')
+  })
+
+  it('throws when the package is not referenced', () => {
+    expect(() => getPackageReferenceVersion(csproj, 'Newtonsoft.Json')).toThrow(
+      'No PackageReference for Newtonsoft.Json found in csproj'
+    )
+  })
+})
 
 describe('filterVersions', () => {
   const versions = [
@@ -45,9 +114,44 @@ describe('filterVersions', () => {
   it('anchors the pattern to the whole version', () => {
     expect(filterVersions(['110.10.1', '10.100.1'], '10.10.*')).toBe(undefined)
   })
+})
 
-  it('returns undefined when nothing matches', () => {
-    expect(filterVersions(versions, '11.*')).toBe(undefined)
+describe('resolveVersion', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  function stubNuget(versions: string[]): ReturnType<typeof vi.fn> {
+    const fetchMock = vi.fn(async () => Response.json({ versions }))
+    vi.stubGlobal('fetch', fetchMock)
+    return fetchMock
+  }
+
+  it('strips a pre-release suffix without querying NuGet', async () => {
+    const fetchMock = stubNuget([])
+
+    expect(await resolveVersion('12.3.0-rc1', 'Jellyfin.Model')).toBe('12.3.0')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('resolves a floating version to the latest stable NuGet release', async () => {
+    const fetchMock = stubNuget([
+      '10.10.7',
+      '10.11.0',
+      '10.11.5',
+      '10.11.6-rc1'
+    ])
+
+    expect(await resolveVersion('10.11.*-*', 'Jellyfin.Model')).toBe('10.11.5')
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.nuget.org/v3-flatcontainer/jellyfin.model/index.json'
+    )
+  })
+
+  it('falls back to the .0 release when no stable release matches', async () => {
+    stubNuget(['10.11.5', '10.12.0-rc1'])
+
+    expect(await resolveVersion('10.12.*-*', 'Jellyfin.Model')).toBe('10.12.0')
   })
 })
 
@@ -82,6 +186,8 @@ describe('updateManifest', () => {
   const readme = '# Intro Skipper\n\nRequires Jellyfin 10.10.3 (or newer).\n'
   const bugReport =
     'description: Jellyfin 10.10.3 (or newer)\nbody:\n  - type: input\n'
+  const csproj =
+    '<Project>\n  <ItemGroup>\n    <PackageReference Include="Jellyfin.Model" Version="10.10.7" />\n  </ItemGroup>\n</Project>\n'
 
   let tmpDir: string
   let originalCwd: string
@@ -91,7 +197,6 @@ describe('updateManifest', () => {
     const env: Record<string, string | undefined> = {
       GITHUB_REPOSITORY: 'intro-skipper/intro-skipper',
       NEW_FILE_VERSION: '1.10.10.20',
-      IS_BETA: 'true',
       MAIN_VERSION: '10.10',
       GITHUB_PAT: 'secret-token',
       ...overrides
@@ -135,6 +240,8 @@ describe('updateManifest', () => {
     fs.mkdirSync('.github/ISSUE_TEMPLATE', { recursive: true })
     fs.writeFileSync('.github/ISSUE_TEMPLATE/bug_report_form.yml', bugReport)
     fs.writeFileSync('intro-skipper-v1.10.10.20.zip', zipContent)
+    fs.mkdirSync('IntroSkipper')
+    fs.writeFileSync('IntroSkipper/IntroSkipper.csproj', csproj)
 
     fetchMock = vi.fn(async () => new Response(null, { status: 204 }))
     vi.stubGlobal('fetch', fetchMock)
@@ -148,7 +255,7 @@ describe('updateManifest', () => {
     vi.unstubAllGlobals()
   })
 
-  it('dispatches a beta manifest update and updates docs', async () => {
+  it('dispatches a manifest update and updates docs', async () => {
     vi.useFakeTimers({ now: new Date('2026-01-02T03:04:05.678Z') })
     try {
       await runUpdateManifest()
@@ -158,7 +265,7 @@ describe('updateManifest', () => {
 
     expect(core.setFailed).not.toHaveBeenCalled()
     expect(core.setSecret).toHaveBeenCalledWith('secret-token')
-    // Beta releases never query NuGet.
+    // The Jellyfin version comes from the csproj, never from NuGet.
     expect(fetchMock).toHaveBeenCalledTimes(1)
 
     const { url, init } = dispatchCall()
@@ -178,7 +285,7 @@ describe('updateManifest', () => {
         version: '1.10.10.20',
         changelog:
           '- See the full changelog at [GitHub](https://github.com/intro-skipper/intro-skipper/releases/tag/10.10/v1.10.10.20)\n',
-        targetAbi: '10.10.0.0',
+        targetAbi: '10.10.7.0',
         sourceUrl:
           'https://github.com/intro-skipper/intro-skipper/releases/download/10.10/v1.10.10.20/intro-skipper-v1.10.10.20.zip',
         checksum: md5,
@@ -187,19 +294,41 @@ describe('updateManifest', () => {
     })
 
     expect(fs.readFileSync('README.md', 'utf8')).toContain(
-      'Jellyfin 10.10.0 (or newer)'
+      'Jellyfin 10.10.7 (or newer)'
     )
     expect(
       fs.readFileSync('.github/ISSUE_TEMPLATE/bug_report_form.yml', 'utf8')
-    ).toContain('Jellyfin 10.10.0 (or newer)')
+    ).toContain('Jellyfin 10.10.7 (or newer)')
   })
 
-  it('uses the latest stable NuGet version for non-beta releases', async () => {
-    setEnv({ IS_BETA: 'false' })
+  it('uses the Jellyfin.Model version from the csproj, not MAIN_VERSION', async () => {
+    // Jellyfin 12 bumps the minor version, so MAIN_VERSION (12.0) no longer
+    // says which ABI the plugin was built against.
+    setEnv({ MAIN_VERSION: '12.0' })
+    fs.writeFileSync(
+      'IntroSkipper/IntroSkipper.csproj',
+      csproj.replace('10.10.7', '12.2.0')
+    )
+
+    await runUpdateManifest()
+
+    expect(core.setFailed).not.toHaveBeenCalled()
+    expect(dispatchPayload().client_payload.targetAbi).toBe('12.2.0.0')
+    expect(fs.readFileSync('README.md', 'utf8')).toContain(
+      'Jellyfin 12.2.0 (or newer)'
+    )
+  })
+
+  it('resolves a floating 10.x reference against NuGet', async () => {
+    setEnv({ MAIN_VERSION: '10.11' })
+    fs.writeFileSync(
+      'IntroSkipper/IntroSkipper.csproj',
+      csproj.replace('10.10.7', '10.11.*-*')
+    )
     fetchMock.mockImplementation(async (url: string) => {
       if (url.includes('api.nuget.org')) {
         return Response.json({
-          versions: ['10.9.11', '10.10.3', '10.10.7', '10.10.8-rc1', '10.11.0']
+          versions: ['10.10.7', '10.11.0', '10.11.5', '10.11.6-rc1']
         })
       }
       return new Response(null, { status: 204 })
@@ -208,12 +337,9 @@ describe('updateManifest', () => {
     await runUpdateManifest()
 
     expect(core.setFailed).not.toHaveBeenCalled()
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://api.nuget.org/v3-flatcontainer/jellyfin.model/index.json'
-    )
-    expect(dispatchPayload().client_payload.targetAbi).toBe('10.10.7.0')
+    expect(dispatchPayload().client_payload.targetAbi).toBe('10.11.5.0')
     expect(fs.readFileSync('README.md', 'utf8')).toContain(
-      'Jellyfin 10.10.7 (or newer)'
+      'Jellyfin 10.11.5 (or newer)'
     )
   })
 
@@ -228,7 +354,7 @@ describe('updateManifest', () => {
   })
 
   it('leaves docs untouched when already up to date', async () => {
-    const current = readme.replace('10.10.3', '10.10.0')
+    const current = readme.replace('10.10.3', '10.10.7')
     fs.writeFileSync('README.md', current)
 
     await runUpdateManifest()
@@ -258,6 +384,10 @@ describe('updateManifest', () => {
     [
       '.github/ISSUE_TEMPLATE/bug_report_form.yml',
       './.github/ISSUE_TEMPLATE/bug_report_form.yml file not found'
+    ],
+    [
+      'IntroSkipper/IntroSkipper.csproj',
+      './IntroSkipper/IntroSkipper.csproj file not found'
     ]
   ])('fails when %s is missing', async (file, message) => {
     fs.rmSync(file)
@@ -292,28 +422,13 @@ describe('updateManifest', () => {
     expect(fs.readFileSync('README.md', 'utf8')).toBe(readme)
   })
 
-  it('fails when no NuGet version matches', async () => {
-    setEnv({ IS_BETA: 'false' })
-    fetchMock.mockResolvedValue(Response.json({ versions: ['10.9.11'] }))
+  it('fails when the csproj does not reference Jellyfin.Model', async () => {
+    fs.writeFileSync('IntroSkipper/IntroSkipper.csproj', '<Project />\n')
 
     await runUpdateManifest()
 
     expect(core.setFailed).toHaveBeenCalledWith(
-      'Error updating manifest: No versions of Jellyfin.Model match the pattern 10.10.*'
-    )
-    expect(dispatchPayloadCalls()).toBe(0)
-  })
-
-  it('fails when the NuGet request fails', async () => {
-    setEnv({ IS_BETA: 'false' })
-    fetchMock.mockResolvedValue(
-      new Response(null, { status: 503, statusText: 'Service Unavailable' })
-    )
-
-    await runUpdateManifest()
-
-    expect(core.setFailed).toHaveBeenCalledWith(
-      'Error updating manifest: Error fetching package information for Jellyfin.Model: Failed to fetch package information: Service Unavailable'
+      'Error updating manifest: No PackageReference for Jellyfin.Model found in csproj'
     )
     expect(dispatchPayloadCalls()).toBe(0)
   })
