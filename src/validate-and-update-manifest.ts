@@ -5,7 +5,6 @@ import fs from 'fs'
 
 const repository = process.env.GITHUB_REPOSITORY
 const version = process.env.NEW_FILE_VERSION
-const isBeta = process.env.IS_BETA
 const mainVersion = process.env.MAIN_VERSION
 const token = process.env.GITHUB_PAT
 
@@ -14,11 +13,8 @@ if (token) {
   core.setSecret(token)
 }
 
-type Nuget = {
-  versions: string[]
-}
-
 const readmePath = './README.md'
+const csprojPath = './IntroSkipper/IntroSkipper.csproj'
 const bugReportFormPath = './.github/ISSUE_TEMPLATE/bug_report_form.yml'
 
 export async function updateManifest(): Promise<void> {
@@ -46,17 +42,20 @@ export async function updateManifest(): Promise<void> {
     core.setFailed(`${bugReportFormPath} file not found`)
     return
   }
+  if (!fs.existsSync(csprojPath)) {
+    core.setFailed(`${csprojPath} file not found`)
+    return
+  }
 
   try {
-    let currentVersion: string
-    if (isBeta === 'false') {
-      currentVersion = await getNugetPackageVersion(
-        'Jellyfin.Model',
-        `${mainVersion}.*`
-      )
-    } else {
-      currentVersion = `${mainVersion}.0`
-    }
+    const currentVersion = await resolveVersion(
+      getPackageReferenceVersion(
+        fs.readFileSync(csprojPath, 'utf8'),
+        'Jellyfin.Model'
+      ),
+      'Jellyfin.Model'
+    )
+    core.info(`Plugin is built against Jellyfin.Model ${currentVersion}`)
     const targetAbi = `${currentVersion}.0`
     const client_payload = {
       pluginName: 'Intro Skipper',
@@ -160,6 +159,56 @@ export function updateDocsVersion(
   return { updatedContent, wasUpdated }
 }
 
+/**
+ * Returns the version of the `PackageReference` named `packageName` in the
+ * given csproj content, as written there (e.g. `12.2.0` or `10.11.*-*`).
+ * The version may be an attribute in any order, with either quote style and
+ * spaces around `=`, or a `<Version>` child; commented-out references are
+ * ignored.
+ */
+export function getPackageReferenceVersion(
+  csproj: string,
+  packageName: string
+): string {
+  const escaped = packageName.replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+  const reference = new RegExp(
+    `<PackageReference\\b([^>]*\\bInclude\\s*=\\s*(["'])${escaped}\\2[^>]*?)(?:/>|>([\\s\\S]*?)</PackageReference>)`
+  ).exec(csproj.replace(/<!--[\s\S]*?-->/g, ''))
+  const version =
+    reference &&
+    (/\bVersion\s*=\s*(["'])(.+?)\1/.exec(reference[1])?.[2] ??
+      /<Version>\s*([^<\s]+)\s*<\/Version>/.exec(reference[3] ?? '')?.[1])
+  if (!version) {
+    throw new Error(`No PackageReference for ${packageName} found in csproj`)
+  }
+  return version
+}
+
+/**
+ * Turns a csproj package version into the Jellyfin version the manifest
+ * targets, without any pre-release suffix (e.g. `12.3.0-rc1` becomes
+ * `12.3.0`). A floating version resolves on NuGet the way restore does:
+ * `10.11.*` to the latest stable match, `10.11.*-*` to the latest match
+ * including pre-releases. With no match on NuGet it falls back to the `.0`
+ * release (`10.12.0`).
+ */
+export async function resolveVersion(
+  reference: string,
+  packageName: string
+): Promise<string> {
+  const [base] = reference.split('-')
+  if (!base.includes('*')) {
+    return base
+  }
+  const versions = await fetchNugetPackageVersions(packageName)
+  const resolved = filterVersions(versions, base, reference.endsWith('-*'))
+  return (resolved ?? base.replace(/\*/g, '0')).split('-')[0]
+}
+
+type Nuget = {
+  versions: string[]
+}
+
 async function fetchNugetPackageVersions(
   packageName: string
 ): Promise<string[]> {
@@ -187,42 +236,26 @@ async function fetchNugetPackageVersions(
 }
 
 /**
- * Returns the latest stable version matching `versionPattern`, where `*`
- * acts as a wildcard (e.g. `10.11.*`). Pre-release versions (containing a
- * `-`) are ignored. Relies on NuGet returning versions in ascending order.
+ * Returns the latest version matching `versionPattern`, where `*` acts as a
+ * wildcard (e.g. `10.11.*`). Pre-release versions (containing a `-`) are
+ * ignored unless `includePrerelease` is set. Relies on NuGet returning
+ * versions in ascending order.
  */
 export function filterVersions(
   versions: string[],
-  versionPattern: string
+  versionPattern: string,
+  includePrerelease = false
 ): string | undefined {
   const escaped = versionPattern
     .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
     .replace(/\*/g, '.*')
   const versionRegex = new RegExp(`^${escaped}$`)
   const matchingVersions = versions.filter(
-    (v) => !v.includes('-') && versionRegex.test(v)
+    (v) => (includePrerelease || !v.includes('-')) && versionRegex.test(v)
   )
 
   if (matchingVersions.length > 0) {
     return matchingVersions[matchingVersions.length - 1]
   }
   return undefined
-}
-
-async function getNugetPackageVersion(
-  packageName: string,
-  versionPattern: string
-): Promise<string> {
-  const versions = await fetchNugetPackageVersions(packageName)
-  const latestVersion = filterVersions(versions, versionPattern)
-
-  if (!latestVersion) {
-    throw new Error(
-      `No versions of ${packageName} match the pattern ${versionPattern}`
-    )
-  }
-  core.info(
-    `Latest version of ${packageName} matching ${versionPattern}: ${latestVersion}`
-  )
-  return latestVersion
 }
