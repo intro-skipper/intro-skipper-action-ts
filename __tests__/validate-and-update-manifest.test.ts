@@ -50,6 +50,15 @@ describe('getPackageReferenceVersion', () => {
     )
   })
 
+  it('accepts single quotes and spaces around =', () => {
+    const styled = csproj.replace(
+      'Include="Jellyfin.Model" Version="12.2.0"',
+      "Include = 'Jellyfin.Model' Version= '12.2.0'"
+    )
+
+    expect(getPackageReferenceVersion(styled, 'Jellyfin.Model')).toBe('12.2.0')
+  })
+
   it('reads a <Version> child element', () => {
     const child = csproj.replace(
       '<PackageReference Include="Jellyfin.Model" Version="12.2.0" />',
@@ -107,6 +116,13 @@ describe('filterVersions', () => {
     )
   })
 
+  it('includes pre-release versions when asked', () => {
+    expect(filterVersions(versions, '10.11.*', true)).toBe('10.11.0')
+    expect(filterVersions(['10.11.0', '10.11.1-rc1'], '10.11.*', true)).toBe(
+      '10.11.1-rc1'
+    )
+  })
+
   it('treats dots in the pattern literally', () => {
     expect(filterVersions(['10x10x1'], '10.10.*')).toBe(undefined)
   })
@@ -134,22 +150,25 @@ describe('resolveVersion', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('resolves a floating version to the latest stable NuGet release', async () => {
-    const fetchMock = stubNuget([
-      '10.10.7',
-      '10.11.0',
-      '10.11.5',
-      '10.11.6-rc1'
-    ])
+  const floatingVersions = ['10.10.7', '10.11.0', '10.11.5', '10.11.6-rc1']
 
-    expect(await resolveVersion('10.11.*-*', 'Jellyfin.Model')).toBe('10.11.5')
+  it('resolves a floating stable version to the latest stable NuGet release', async () => {
+    const fetchMock = stubNuget(floatingVersions)
+
+    expect(await resolveVersion('10.11.*', 'Jellyfin.Model')).toBe('10.11.5')
     expect(fetchMock).toHaveBeenCalledWith(
       'https://api.nuget.org/v3-flatcontainer/jellyfin.model/index.json'
     )
   })
 
-  it('falls back to the .0 release when no stable release matches', async () => {
-    stubNuget(['10.11.5', '10.12.0-rc1'])
+  it('resolves a floating pre-release version like restore, including pre-releases', async () => {
+    stubNuget(floatingVersions)
+
+    expect(await resolveVersion('10.11.*-*', 'Jellyfin.Model')).toBe('10.11.6')
+  })
+
+  it('falls back to the .0 release when nothing on NuGet matches', async () => {
+    stubNuget(['10.11.5'])
 
     expect(await resolveVersion('10.12.*-*', 'Jellyfin.Model')).toBe('10.12.0')
   })
@@ -337,9 +356,10 @@ describe('updateManifest', () => {
     await runUpdateManifest()
 
     expect(core.setFailed).not.toHaveBeenCalled()
-    expect(dispatchPayload().client_payload.targetAbi).toBe('10.11.5.0')
+    // `*-*` restores the 10.11.6-rc1 pre-release, so that is the target.
+    expect(dispatchPayload().client_payload.targetAbi).toBe('10.11.6.0')
     expect(fs.readFileSync('README.md', 'utf8')).toContain(
-      'Jellyfin 10.11.5 (or newer)'
+      'Jellyfin 10.11.6 (or newer)'
     )
   })
 

@@ -30672,26 +30672,28 @@ function updateDocsVersion(content, currentVersion) {
 /**
  * Returns the version of the `PackageReference` named `packageName` in the
  * given csproj content, as written there (e.g. `12.2.0` or `10.11.*-*`).
- * The version may be an attribute in any order or a `<Version>` child, and
- * commented-out references are ignored.
+ * The version may be an attribute in any order, with either quote style and
+ * spaces around `=`, or a `<Version>` child; commented-out references are
+ * ignored.
  */
 function getPackageReferenceVersion(csproj, packageName) {
     const escaped = packageName.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
-    const reference = new RegExp(`<PackageReference\\b([^>]*\\bInclude="${escaped}"[^>]*?)(?:/>|>([\\s\\S]*?)</PackageReference>)`).exec(csproj.replace(/<!--[\s\S]*?-->/g, ''));
+    const reference = new RegExp(`<PackageReference\\b([^>]*\\bInclude\\s*=\\s*(["'])${escaped}\\2[^>]*?)(?:/>|>([\\s\\S]*?)</PackageReference>)`).exec(csproj.replace(/<!--[\s\S]*?-->/g, ''));
     const version = reference &&
-        (/\bVersion="([^"]+)"/.exec(reference[1]) ??
-            /<Version>\s*([^<\s]+)\s*<\/Version>/.exec(reference[2] ?? ''));
+        (/\bVersion\s*=\s*(["'])(.+?)\1/.exec(reference[1])?.[2] ??
+            /<Version>\s*([^<\s]+)\s*<\/Version>/.exec(reference[3] ?? '')?.[1]);
     if (!version) {
         throw new Error(`No PackageReference for ${packageName} found in csproj`);
     }
-    return version[1];
+    return version;
 }
 /**
  * Turns a csproj package version into the Jellyfin version the manifest
  * targets, without any pre-release suffix (e.g. `12.3.0-rc1` becomes
- * `12.3.0`). A floating version such as `10.11.*-*` resolves to the latest
- * stable NuGet release matching it, or to its `.0` release (`10.12.0`) when
- * none is stable yet.
+ * `12.3.0`). A floating version resolves on NuGet the way restore does:
+ * `10.11.*` to the latest stable match, `10.11.*-*` to the latest match
+ * including pre-releases. With no match on NuGet it falls back to the `.0`
+ * release (`10.12.0`).
  */
 async function resolveVersion(reference, packageName) {
     const [base] = reference.split('-');
@@ -30699,7 +30701,8 @@ async function resolveVersion(reference, packageName) {
         return base;
     }
     const versions = await fetchNugetPackageVersions(packageName);
-    return filterVersions(versions, base) ?? base.replace(/\*/g, '0');
+    const resolved = filterVersions(versions, base, reference.endsWith('-*'));
+    return (resolved ?? base.replace(/\*/g, '0')).split('-')[0];
 }
 async function fetchNugetPackageVersions(packageName) {
     const url = `https://api.nuget.org/v3-flatcontainer/${packageName.toLowerCase()}/index.json`;
@@ -30716,16 +30719,17 @@ async function fetchNugetPackageVersions(packageName) {
     }
 }
 /**
- * Returns the latest stable version matching `versionPattern`, where `*`
- * acts as a wildcard (e.g. `10.11.*`). Pre-release versions (containing a
- * `-`) are ignored. Relies on NuGet returning versions in ascending order.
+ * Returns the latest version matching `versionPattern`, where `*` acts as a
+ * wildcard (e.g. `10.11.*`). Pre-release versions (containing a `-`) are
+ * ignored unless `includePrerelease` is set. Relies on NuGet returning
+ * versions in ascending order.
  */
-function filterVersions(versions, versionPattern) {
+function filterVersions(versions, versionPattern, includePrerelease = false) {
     const escaped = versionPattern
         .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
         .replace(/\*/g, '.*');
     const versionRegex = new RegExp(`^${escaped}$`);
-    const matchingVersions = versions.filter((v) => !v.includes('-') && versionRegex.test(v));
+    const matchingVersions = versions.filter((v) => (includePrerelease || !v.includes('-')) && versionRegex.test(v));
     if (matchingVersions.length > 0) {
         return matchingVersions[matchingVersions.length - 1];
     }
